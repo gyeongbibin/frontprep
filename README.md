@@ -1,9 +1,47 @@
 # frontprep
 
-An opinionated CLI for automating frontend project setup, including Tailwind
-CSS, linting, testing, Git hooks, and CI.
+`@mingyeongbin/frontprep` is an opinionated CLI that applies and verifies a
+complete frontend tooling baseline. It is developed independently from any
+consumer application.
 
-The first release targets TypeScript-based Next.js 16 App Router projects that
-use pnpm 10. Frontprep is developed as an independent package; consumer
-applications are external acceptance-test targets rather than source
-dependencies.
+## Version 1 support
+
+- Node.js 20.9 or newer
+- Next.js 16 App Router with TypeScript 5
+- pnpm 10 declared in `packageManager`
+- one application at the Git repository root
+- either `app/` or `src/app/`
+
+Workspaces, the Pages Router, JavaScript-only projects, and package managers
+other than pnpm are outside the v1 scope.
+
+## Commands
+
+```text
+frontprep init [--cwd <path>]
+frontprep check [--cwd <path>]
+frontprep --help
+frontprep --version
+```
+
+`init` requires a clean Git worktree on first use. It analyzes all registered
+modules, builds one aggregate plan, applies it transactionally, runs one pnpm
+installation when dependencies change, verifies the project, and writes
+`.frontprep.json` last. `check` is read-only and validates the recorded setup
+before running the generated project check command.
+
+The `init/cli-core` branch contains the reusable engine and intentionally has
+no feature modules registered yet. Quality, Tailwind, test, Git-hooks, and CI
+modules are delivered through separate design-first pull requests based on the
+latest `develop` branch.
+
+## Development
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+pnpm verify:package
+```
+
+`verify:package` inspects the actual npm tarball contents and smoke-tests the
+built executable. Consumer projects remain external acceptance targets.

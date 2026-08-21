@@ -19,7 +19,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
-    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test:run && pnpm build"
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test:run",
+    "verify:package": "pnpm build && node scripts/verify-package.mjs"
   },
   "engines": {
     "node": ">=20.9.0"

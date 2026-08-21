@@ -210,4 +210,25 @@ Unit tests cover:
 
 Fixture tests initialize temporary Git repositories and commit their baseline before executing `init`. Core fixtures use fake modules and a fake package-manager service so core behavior is tested without depending on feature-module implementation or the network.
 
-The core branch's acceptance test packages the compiled executable with stub modules, runs it through the public `bin`, and verifies help, version, unsupported-project diagnostics, and a successful no-op module lifecycle. Full Next.js application acceptance is added as the feature modules land.
+The core branch's acceptance test packages the compiled executable, runs it
+through the public `bin`, and verifies help, version, unsupported-project, and
+supported core-only diagnostics. Full Next.js application acceptance is added
+as the feature modules land.
+
+## Delivery and Package Acceptance
+
+The package is published as `@mingyeongbin/frontprep` with the `frontprep`
+binary. The core branch exposes `init` and `check`, but a supported project
+cannot complete `init` until all five feature modules are registered by their
+design-first branches.
+
+Each module branch starts from the latest merged `develop`, commits its module
+design before implementation and tests, opens as a draft PR, passes complete
+verification, becomes ready for review, and merges back into `develop` before
+the next module branch begins.
+
+`pnpm verify:package` builds a non-splitting ESM executable, checks the exact
+npm tarball file list, verifies the bin metadata, executable mode, and Node
+shebang, and smoke-tests help, version, unsupported-project, and core-only
+supported-project diagnostics. Consumer-specific repository paths are never
+part of the package or core tests.
