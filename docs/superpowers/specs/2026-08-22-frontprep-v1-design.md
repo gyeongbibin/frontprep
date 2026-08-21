@@ -160,7 +160,8 @@ Package dependency rules:
 - Existing incompatible major versions produce a conflict; frontprep does not silently upgrade them.
 - New declarations are written to `package.json`, after which a single
   `pnpm install --ignore-scripts` updates the lockfile and installation without
-  running unrelated consumer lifecycle scripts.
+  running unrelated consumer lifecycle scripts. Frontprep then explicitly
+  rebuilds only its fixed trusted build-dependency allowlist (`esbuild` in v1).
 
 Package script rules:
 
@@ -202,7 +203,9 @@ Before applying a non-empty plan, the core copies every existing target file and
 
 Application uses atomic same-directory temporary-file renames where supported.
 The core then runs one `pnpm install --ignore-scripts`, verifies modules, and
-runs the full project check. `.frontprep.json` is the last file written.
+runs `pnpm rebuild esbuild` for the trusted v1 build allowlist, verifies
+modules, and runs the full project check. `.frontprep.json` is the last file
+written.
 
 If a write, install, or verification step fails, the core restores every planned file, its previous mode, `package.json`, and `pnpm-lock.yaml`, and deletes planned files that were newly created. It reports the failed phase and command output. Contents of ignored `node_modules` are not rolled back because pnpm owns that directory; this limitation does not leave tracked project changes.
 

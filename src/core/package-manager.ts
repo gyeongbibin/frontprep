@@ -7,6 +7,8 @@ export interface ProcessService {
   run: ProcessRunner['run']
 }
 
+const TRUSTED_BUILD_DEPENDENCIES = ['esbuild'] as const
+
 function unsupportedPnpm(version: string): FrontprepError {
   return new FrontprepError(
     `Frontprep requires a pnpm 10 runtime; received ${JSON.stringify(version)}.`,
@@ -35,6 +37,10 @@ export class PnpmPackageManager {
 
   async install(root: string, signal?: AbortSignal): Promise<void> {
     await this.runner.run('pnpm', ['install', '--ignore-scripts'], {
+      cwd: root,
+      signal,
+    })
+    await this.runner.run('pnpm', ['rebuild', ...TRUSTED_BUILD_DEPENDENCIES], {
       cwd: root,
       signal,
     })

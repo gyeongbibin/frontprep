@@ -124,6 +124,7 @@ With a manifest, dirty state is allowed only for the immediate idempotency case.
 5. Write planned files atomically and apply executable modes.
 6. Run `pnpm install --ignore-scripts` once when dependency declarations
    changed, so unrelated consumer lifecycle scripts cannot escape rollback.
+   Then rebuild the fixed trusted dependency allowlist (`esbuild` in v1).
 7. Run module verifiers in registry order.
 8. Run `pnpm run frontprep:check`.
 9. Compute final hashes and ownership metadata for every changed file.
@@ -149,6 +150,7 @@ The package-manager service executes only these fixed programs:
 - `git` for root and status inspection.
 - `pnpm --version` for runtime compatibility.
 - `pnpm install --ignore-scripts` after a dependency-plan change.
+- `pnpm rebuild esbuild` for the v1 trusted build-dependency allowlist.
 - `pnpm run frontprep:check` for final verification.
 
 Commands use `spawn` with `shell: false`, an explicit working directory,

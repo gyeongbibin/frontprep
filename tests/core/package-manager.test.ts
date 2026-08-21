@@ -55,7 +55,7 @@ describe('PnpmPackageManager', () => {
     },
   )
 
-  it('installs without running consumer lifecycle scripts', async () => {
+  it('suppresses consumer lifecycle scripts and rebuilds only trusted dependencies', async () => {
     const runner = new RecordingRunner('')
     const packageManager = new PnpmPackageManager(runner)
 
@@ -64,6 +64,11 @@ describe('PnpmPackageManager', () => {
     expect(runner.calls).toEqual([
       {
         args: ['install', '--ignore-scripts'],
+        command: 'pnpm',
+        options: { cwd: '/project', signal: undefined },
+      },
+      {
+        args: ['rebuild', 'esbuild'],
         command: 'pnpm',
         options: { cwd: '/project', signal: undefined },
       },
