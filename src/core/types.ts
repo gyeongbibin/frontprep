@@ -56,5 +56,6 @@ export interface ProjectContext {
   }
   root: string
   sourceDirectory: string | null
+  stylesheetNeedsImport: boolean
   stylesheetPath: string
 }
