@@ -16,7 +16,9 @@ import {
   verifyModules,
   verifyStructure,
 } from '../core/verifier.js'
+import { createModuleRegistry } from '../modules/registry.js'
 import type { SetupModule, VerificationResult } from '../modules/types.js'
+import { FRONTPREP_VERSION } from '../version.js'
 
 export interface InitOptions {
   cwd: string
@@ -59,8 +61,6 @@ export interface CommandServices {
   ): Promise<VerificationResult>
 }
 
-export const FRONTPREP_VERSION = '0.1.0-beta.0'
-
 export function createCommandServices(
   reporter: CommandReporter = new Reporter(),
   modules: readonly SetupModule[] = [],
@@ -71,7 +71,7 @@ export function createCommandServices(
     buildPlan,
     detectProject,
     frontprepVersion: FRONTPREP_VERSION,
-    modules,
+    modules: createModuleRegistry(modules),
     reporter,
     runProjectCheck,
     verifyModules,

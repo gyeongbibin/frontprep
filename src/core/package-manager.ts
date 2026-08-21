@@ -34,6 +34,9 @@ export class PnpmPackageManager {
   }
 
   async install(root: string, signal?: AbortSignal): Promise<void> {
-    await this.runner.run('pnpm', ['install'], { cwd: root, signal })
+    await this.runner.run('pnpm', ['install', '--ignore-scripts'], {
+      cwd: root,
+      signal,
+    })
   }
 }

@@ -55,7 +55,7 @@ describe('PnpmPackageManager', () => {
     },
   )
 
-  it('runs exactly pnpm install in the project root', async () => {
+  it('installs without running consumer lifecycle scripts', async () => {
     const runner = new RecordingRunner('')
     const packageManager = new PnpmPackageManager(runner)
 
@@ -63,7 +63,7 @@ describe('PnpmPackageManager', () => {
 
     expect(runner.calls).toEqual([
       {
-        args: ['install'],
+        args: ['install', '--ignore-scripts'],
         command: 'pnpm',
         options: { cwd: '/project', signal: undefined },
       },

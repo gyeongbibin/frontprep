@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
-import { minVersion } from 'semver'
+import { minVersion, subset, validRange } from 'semver'
 import { parse as parseYaml } from 'yaml'
 
 import { detectNextApp } from '../adapters/next-app.js'
@@ -47,8 +47,12 @@ function assertMajorVersion(
   major: number,
   label: string,
 ): void {
-  const minimum = range === undefined ? null : minVersion(range)
-  if (minimum?.major !== major) {
+  const supportedRange = `>=${major}.0.0 <${major + 1}.0.0-0`
+  if (
+    range === undefined ||
+    validRange(range) === null ||
+    !subset(range, supportedRange)
+  ) {
     throw new UnsupportedProjectError(
       `${label} is required. Expected major version ${major}.`,
     )

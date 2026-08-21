@@ -121,6 +121,7 @@ async function restoreBackup(
   fileSystem: FileSystem,
   paths: readonly ProjectPath[],
   entries: ReadonlyMap<ProjectPath, BackupEntry>,
+  createdDirectories: readonly ProjectPath[],
 ): Promise<readonly unknown[]> {
   const failures: unknown[] = []
   for (const path of [...paths].reverse()) {
@@ -139,7 +140,35 @@ async function restoreBackup(
       failures.push(error)
     }
   }
+  for (const path of createdDirectories) {
+    try {
+      await fileSystem.removeDirectoryIfEmpty(path)
+    } catch (error) {
+      failures.push(error)
+    }
+  }
   return failures
+}
+
+async function missingTargetDirectories(
+  fileSystem: FileSystem,
+  plan: ChangePlan,
+): Promise<readonly ProjectPath[]> {
+  const missing = new Set<ProjectPath>()
+  for (const operation of plan.operations) {
+    for (const path of await fileSystem.missingParentDirectories(
+      operation.path,
+    )) {
+      missing.add(path)
+    }
+  }
+  return Object.freeze(
+    [...missing].sort(
+      (left, right) =>
+        right.split('/').length - left.split('/').length ||
+        right.localeCompare(left),
+    ),
+  )
 }
 
 async function fingerprint(
@@ -209,6 +238,7 @@ export async function applyPlan(
   await (services.assertGitState ?? assertSafeGitState)(context)
   services.signal?.throwIfAborted()
   await assertCurrentPlan(fileSystem, plan)
+  const createdDirectories = await missingTargetDirectories(fileSystem, plan)
 
   const targets = uniqueTargets(plan)
   const backup = await createBackup(fileSystem, targets)
@@ -267,7 +297,12 @@ export async function applyPlan(
       manifest: Object.freeze(manifest),
     })
   } catch (error) {
-    const failures = await restoreBackup(fileSystem, targets, backup.entries)
+    const failures = await restoreBackup(
+      fileSystem,
+      targets,
+      backup.entries,
+      createdDirectories,
+    )
     if (failures.length > 0) throw rollbackFailure(error, failures)
     throw error
   } finally {

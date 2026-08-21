@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 import { Command, CommanderError } from 'commander'
@@ -6,18 +7,23 @@ import { Command, CommanderError } from 'commander'
 import { runCheck } from './commands/check.js'
 import {
   createCommandServices,
-  FRONTPREP_VERSION,
   runInit,
   type CommandServices,
 } from './commands/init.js'
 import { FrontprepError } from './core/errors.js'
 import { ProcessFailure } from './core/process.js'
 import { Reporter, type OutputWriter } from './core/reporter.js'
+import { FRONTPREP_VERSION } from './version.js'
 
 export interface CliIo {
   isTTY?: boolean
   writeErr(value: string): void
   writeOut(value: string): void
+}
+
+export interface SignalSource {
+  on(event: NodeJS.Signals, listener: () => void): unknown
+  off(event: NodeJS.Signals, listener: () => void): unknown
 }
 
 const DEFAULT_IO: CliIo = {
@@ -43,6 +49,7 @@ function servicesForIo(io: CliIo): CommandServices {
 export function createCli(
   services: CommandServices,
   io: CliIo = DEFAULT_IO,
+  signal?: AbortSignal,
 ): Command {
   const program = new Command()
   program
@@ -61,14 +68,16 @@ export function createCli(
     .description('Apply every registered frontprep module.')
     .option('--cwd <path>', 'project root', process.cwd())
     .action(async ({ cwd }: { cwd: string }) => {
-      await runInit({ cwd }, services)
+      await runInit({ cwd, signal }, services)
     })
 
   program
     .command('check')
     .description('Verify frontprep configuration without changing files.')
     .option('--cwd <path>', 'project root', process.cwd())
-    .action(async ({ cwd }: { cwd: string }) => runCheck({ cwd }, services))
+    .action(async ({ cwd }: { cwd: string }) =>
+      runCheck({ cwd, signal }, services),
+    )
 
   return program
 }
@@ -77,11 +86,14 @@ export async function runCli(
   argv: readonly string[],
   suppliedServices?: CommandServices,
   io: CliIo = DEFAULT_IO,
+  signal?: AbortSignal,
 ): Promise<number> {
   const services = suppliedServices ?? servicesForIo(io)
   const diagnostics = new Reporter(writer(io, 'out'), writer(io, 'err'))
   try {
-    await createCli(services, io).parseAsync([...argv], { from: 'node' })
+    await createCli(services, io, signal).parseAsync([...argv], {
+      from: 'node',
+    })
     return 0
   } catch (error) {
     if (error instanceof CommanderError) {
@@ -108,9 +120,42 @@ export async function runCli(
   }
 }
 
-if (
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
-  process.exitCode = await runCli(process.argv)
+export async function runCliWithSignals(
+  argv: readonly string[],
+  services?: CommandServices,
+  io: CliIo = DEFAULT_IO,
+  signalSource: SignalSource = process,
+): Promise<number> {
+  const controller = new AbortController()
+  const abort = (): void => {
+    controller.abort(
+      new FrontprepError('Frontprep was interrupted.', {
+        code: 'INTERRUPTED',
+        exitCode: 1,
+        phase: 'application',
+        recovery: 'Run frontprep again after reviewing the restored worktree.',
+      }),
+    )
+  }
+  signalSource.on('SIGINT', abort)
+  signalSource.on('SIGTERM', abort)
+  try {
+    return await runCli(argv, services, io, controller.signal)
+  } finally {
+    signalSource.off('SIGINT', abort)
+    signalSource.off('SIGTERM', abort)
+  }
+}
+
+function isDirectExecution(): boolean {
+  if (process.argv[1] === undefined) return false
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  } catch {
+    return false
+  }
+}
+
+if (isDirectExecution()) {
+  process.exitCode = await runCliWithSignals(process.argv)
 }

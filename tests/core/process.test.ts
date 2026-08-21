@@ -84,4 +84,34 @@ describe('ProcessRunner', () => {
       signal: 'SIGTERM',
     })
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'terminates the complete child process group on abort',
+    async () => {
+      const project = await createProject()
+      const runner = new ProcessRunner()
+      const controller = new AbortController()
+      const marker = join(project.root, 'grandchild-survived')
+      const grandchild = [
+        "const { writeFileSync } = require('node:fs')",
+        `setTimeout(() => writeFileSync(${JSON.stringify(marker)}, 'alive'), 250)`,
+      ].join(';')
+      const parent = [
+        "const { spawn } = require('node:child_process')",
+        `spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' })`,
+        'setInterval(() => undefined, 1_000)',
+      ].join(';')
+
+      const pending = runner.run(process.execPath, ['-e', parent], {
+        cwd: project.root,
+        signal: controller.signal,
+      })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      controller.abort()
+      await expect(pending).rejects.toBeInstanceOf(ProcessFailure)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      await expect(access(marker)).rejects.toMatchObject({ code: 'ENOENT' })
+    },
+  )
 })

@@ -6,6 +6,7 @@ import { detectProject } from '../../src/core/project-detector.js'
 import type { TransactionResult } from '../../src/core/transaction.js'
 import type { ModuleId } from '../../src/core/types.js'
 import {
+  createCommandServices,
   runInit,
   type CommandReporter,
   type CommandServices,
@@ -66,6 +67,21 @@ function setupModule(id: ModuleId, calls: string[]): SetupModule<string> {
 }
 
 describe('runInit', () => {
+  it('normalizes module order and rejects duplicate IDs at the service boundary', () => {
+    const calls: string[] = []
+    const quality = setupModule('quality', calls)
+    const ci = setupModule('ci', calls)
+
+    expect(
+      createCommandServices(new RecordingReporter(), [ci, quality]).modules.map(
+        ({ id }) => id,
+      ),
+    ).toEqual(['quality', 'ci'])
+    expect(() =>
+      createCommandServices(new RecordingReporter(), [quality, quality]),
+    ).toThrow('Duplicate module: quality')
+  })
+
   it('analyzes and plans modules in order before building one aggregate plan', async () => {
     const project = await createProject()
     const context = await detectProject(project.root)

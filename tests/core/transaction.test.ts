@@ -176,7 +176,7 @@ describe('applyPlan', () => {
     const project = await createProject()
     const context = await detectProject(project.root)
     const existingPath = 'src/app/globals.css'
-    const createdPath = '.editorconfig'
+    const createdPath = '.frontprep-generated/nested/config.txt'
     const lockPath = join(project.root, 'pnpm-lock.yaml')
     const original = await readFile(join(project.root, existingPath))
     await chmod(join(project.root, existingPath), 0o600)
@@ -207,6 +207,9 @@ describe('applyPlan', () => {
     )
     await expect(
       readFile(join(project.root, createdPath)),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(
+      stat(join(project.root, '.frontprep-generated')),
     ).rejects.toMatchObject({ code: 'ENOENT' })
     expect(await readFile(lockPath, 'utf8')).toBe('original lock\n')
     await expect(

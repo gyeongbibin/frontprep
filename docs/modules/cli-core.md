@@ -122,7 +122,8 @@ With a manifest, dirty state is allowed only for the immediate idempotency case.
 3. Copy existing target files, file modes, `package.json`, and `pnpm-lock.yaml` into the backup map.
 4. Render the final `package.json` in memory.
 5. Write planned files atomically and apply executable modes.
-6. Run `pnpm install` once when dependency declarations changed.
+6. Run `pnpm install --ignore-scripts` once when dependency declarations
+   changed, so unrelated consumer lifecycle scripts cannot escape rollback.
 7. Run module verifiers in registry order.
 8. Run `pnpm run frontprep:check`.
 9. Compute final hashes and ownership metadata for every changed file.
@@ -147,10 +148,15 @@ The package-manager service executes only these fixed programs:
 
 - `git` for root and status inspection.
 - `pnpm --version` for runtime compatibility.
-- `pnpm install` after a dependency-plan change.
+- `pnpm install --ignore-scripts` after a dependency-plan change.
 - `pnpm run frontprep:check` for final verification.
 
-Commands use `spawn` with `shell: false`, an explicit working directory, inherited standard input only when required, and captured output for diagnostics. Signals received by frontprep are forwarded to the active child, and interrupted execution enters transaction restoration.
+Commands use `spawn` with `shell: false`, an explicit working directory,
+inherited standard input only when required, and captured output for
+diagnostics. On POSIX, each child starts in its own process group so an abort
+terminates pnpm and its descendants. SIGINT and SIGTERM are translated to an
+abort signal, forwarded through command services, and kept under frontprep's
+control until transaction restoration finishes.
 
 ## Verification
 
@@ -227,8 +233,10 @@ design before implementation and tests, opens as a draft PR, passes complete
 verification, becomes ready for review, and merges back into `develop` before
 the next module branch begins.
 
-`pnpm verify:package` builds a non-splitting ESM executable, checks the exact
-npm tarball file list, verifies the bin metadata, executable mode, and Node
-shebang, and smoke-tests help, version, unsupported-project, and core-only
-supported-project diagnostics. Consumer-specific repository paths are never
-part of the package or core tests.
+`pnpm verify:package` builds a non-splitting ESM executable, creates the real
+npm tarball, checks its exact file list, installs it into an isolated npm
+prefix, verifies the public bin metadata, executable mode, and Node shebang,
+and smoke-tests help, version, unsupported-project, and core-only
+supported-project diagnostics through `node_modules/.bin/frontprep`.
+Consumer-specific repository paths are never part of the package or core
+tests.

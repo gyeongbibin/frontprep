@@ -136,8 +136,10 @@ The detector must establish all of the following without modifying the project:
 2. The directory is the Git worktree root.
 3. A parseable `package.json` and `tsconfig.json` exist at that root.
 4. `package.json.packageManager` is `pnpm@10.x`.
-5. `next` is a direct dependency with major version 16.
-6. TypeScript is a direct dependency or development dependency with major version 5.
+5. `next` is a direct dependency whose complete declared range is contained
+   within major version 16.
+6. TypeScript is a direct dependency or development dependency whose complete
+   declared range is contained within major version 5.
 7. Exactly one of `app/` and `src/app/` contains an App Router root layout.
 8. A package-level workspace declaration does not identify additional packages.
 9. A `pnpm-workspace.yaml`, when present, does not declare additional workspace package globs.
@@ -156,7 +158,9 @@ Package dependency rules:
 - Existing compatible dependency declarations are preserved, including their original version range.
 - A dependency in the opposite package section is preserved when its installed role remains valid.
 - Existing incompatible major versions produce a conflict; frontprep does not silently upgrade them.
-- New declarations are written to `package.json`, after which a single `pnpm install` updates the lockfile and installation.
+- New declarations are written to `package.json`, after which a single
+  `pnpm install --ignore-scripts` updates the lockfile and installation without
+  running unrelated consumer lifecycle scripts.
 
 Package script rules:
 
@@ -196,11 +200,16 @@ A second successful `init` must produce an empty change plan, skip dependency in
 
 Before applying a non-empty plan, the core copies every existing target file and its mode into a temporary directory outside the consumer repository. It also records which planned files do not yet exist.
 
-Application uses atomic same-directory temporary-file renames where supported. The core then runs one `pnpm install`, verifies modules, and runs the full project check. `.frontprep.json` is the last file written.
+Application uses atomic same-directory temporary-file renames where supported.
+The core then runs one `pnpm install --ignore-scripts`, verifies modules, and
+runs the full project check. `.frontprep.json` is the last file written.
 
 If a write, install, or verification step fails, the core restores every planned file, its previous mode, `package.json`, and `pnpm-lock.yaml`, and deletes planned files that were newly created. It reports the failed phase and command output. Contents of ignored `node_modules` are not rolled back because pnpm owns that directory; this limitation does not leave tracked project changes.
 
-Child processes are spawned with argument arrays and `shell: false`. Frontprep does not interpolate consumer-controlled values into shell command strings.
+Child processes are spawned with argument arrays and `shell: false`. Frontprep
+does not interpolate consumer-controlled values into shell command strings.
+SIGINT and SIGTERM abort the active process group and remain handled until the
+transaction has restored files and modes.
 
 ## Manifest
 

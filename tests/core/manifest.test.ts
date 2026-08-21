@@ -93,4 +93,18 @@ describe('frontprep manifest', () => {
 
     await expect(loadManifest(root)).rejects.toThrow('Invalid .frontprep.json')
   })
+
+  it.each([
+    ['0.2.0', 'newer frontprep'],
+    ['not-a-version', 'valid semantic version'],
+  ])('rejects incompatible frontprepVersion %s', async (version, message) => {
+    const root = await mkdtemp(join(tmpdir(), 'frontprep-manifest-'))
+    await writeFile(
+      join(root, MANIFEST_PATH),
+      `${JSON.stringify({ ...manifest(), frontprepVersion: version })}\n`,
+      'utf8',
+    )
+
+    await expect(loadManifest(root)).rejects.toThrow(message)
+  })
 })

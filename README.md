@@ -43,5 +43,6 @@ pnpm check
 pnpm verify:package
 ```
 
-`verify:package` inspects the actual npm tarball contents and smoke-tests the
-built executable. Consumer projects remain external acceptance targets.
+`verify:package` creates the actual npm tarball, installs it into an isolated
+npm prefix, and smoke-tests the public `frontprep` bin. Consumer projects
+remain external acceptance targets.

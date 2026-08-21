@@ -51,6 +51,7 @@ export class ProcessRunner {
     return new Promise((resolve, reject) => {
       const child = spawn(command, args, {
         cwd: options.cwd,
+        detached: process.platform !== 'win32',
         env: options.env ?? process.env,
         shell: false,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -66,6 +67,14 @@ export class ProcessRunner {
       })
 
       const abort = (): void => {
+        if (process.platform !== 'win32' && child.pid !== undefined) {
+          try {
+            process.kill(-child.pid, 'SIGTERM')
+            return
+          } catch {
+            // The group may have already exited; fall back to the child handle.
+          }
+        }
         child.kill('SIGTERM')
       }
       options.signal?.addEventListener('abort', abort, { once: true })
