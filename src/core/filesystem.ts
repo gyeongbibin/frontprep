@@ -7,11 +7,12 @@ import {
   readFile,
   rename,
   rm,
+  rmdir,
   writeFile,
 } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, posix } from 'node:path'
 
-import { resolveProjectPath, type ProjectPath } from './paths.js'
+import { resolveProjectPath, toProjectPath, type ProjectPath } from './paths.js'
 
 export interface FileSnapshot {
   bytes: Buffer | null
@@ -81,5 +82,40 @@ export class FileSystem {
   async remove(path: ProjectPath): Promise<void> {
     const absolutePath = await resolveProjectPath(this.root, path)
     await rm(absolutePath, { force: true })
+  }
+
+  async missingParentDirectories(
+    path: ProjectPath,
+  ): Promise<readonly ProjectPath[]> {
+    const missing: ProjectPath[] = []
+    let parent = posix.dirname(path)
+    while (parent !== '.') {
+      const projectPath = toProjectPath(parent)
+      const absolutePath = await resolveProjectPath(this.root, projectPath)
+      try {
+        const stats = await lstat(absolutePath)
+        if (!stats.isDirectory()) {
+          throw new Error(`Expected a directory: ${projectPath}`)
+        }
+        break
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+        missing.push(projectPath)
+        parent = posix.dirname(parent)
+      }
+    }
+    return Object.freeze(missing)
+  }
+
+  async removeDirectoryIfEmpty(path: ProjectPath): Promise<void> {
+    const absolutePath = await resolveProjectPath(this.root, path)
+    try {
+      await rmdir(absolutePath)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code !== 'ENOENT' && code !== 'ENOTEMPTY' && code !== 'EEXIST') {
+        throw error
+      }
+    }
   }
 }

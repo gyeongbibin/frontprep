@@ -35,6 +35,17 @@ describe('project detector', () => {
     await expect(detectProject(project.root)).rejects.toThrow('Next.js 16')
   })
 
+  it.each([
+    [{ nextVersion: '>=16.0.0' }, 'Next.js 16'],
+    [{ typescriptVersion: '>=5.0.0' }, 'TypeScript 5'],
+  ])(
+    'rejects ranges that can resolve to a future unsupported major',
+    async (options, message) => {
+      const project = await createProject(options)
+      await expect(detectProject(project.root)).rejects.toThrow(message)
+    },
+  )
+
   it('rejects a project without TypeScript 5', async () => {
     const project = await createProject({ typescriptVersion: null })
     await expect(detectProject(project.root)).rejects.toThrow('TypeScript 5')

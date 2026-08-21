@@ -3,6 +3,7 @@ import type { ModuleId, ProjectContext } from '../core/types.js'
 
 export interface VerificationIssue {
   message: string
+  moduleId?: ModuleId
   path?: string
 }
 

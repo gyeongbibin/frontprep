@@ -2,8 +2,10 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { Ajv2020 } from 'ajv/dist/2020.js'
+import { gt, valid } from 'semver'
 
 import manifestSchema from '../../schema/manifest-v1.json' with { type: 'json' }
+import { FRONTPREP_VERSION } from '../version.js'
 import { FrontprepError } from './errors.js'
 import { FileSystem } from './filesystem.js'
 import { toProjectPath } from './paths.js'
@@ -71,6 +73,14 @@ export async function loadManifest(
       )
       .join('; ')
     throw invalidManifest(details ?? 'schema validation failed')
+  }
+  if (valid(value.frontprepVersion) === null) {
+    throw invalidManifest('frontprepVersion must be a valid semantic version')
+  }
+  if (gt(value.frontprepVersion, FRONTPREP_VERSION)) {
+    throw invalidManifest(
+      `the manifest was created by newer frontprep ${value.frontprepVersion}; upgrade this CLI before continuing`,
+    )
   }
   return value
 }
