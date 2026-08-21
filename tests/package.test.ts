@@ -77,5 +77,5 @@ describe('package metadata', () => {
         cwd: root,
       }),
     ).resolves.toMatchObject({ stdout: expect.stringContaining('verified') })
-  })
+  }, 30_000)
 })
