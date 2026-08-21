@@ -83,12 +83,7 @@ The order is deterministic for output and diagnostics. Dependencies and file int
 ## Core Contracts
 
 ```ts
-export type ModuleId =
-  | 'quality'
-  | 'tailwind'
-  | 'test'
-  | 'git-hooks'
-  | 'ci'
+export type ModuleId = 'quality' | 'tailwind' | 'test' | 'git-hooks' | 'ci'
 
 export interface SetupModule<TAnalysis = unknown> {
   readonly id: ModuleId
