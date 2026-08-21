@@ -10,6 +10,7 @@ import { parse as parseYaml } from 'yaml'
 import { detectNextApp } from '../adapters/next-app.js'
 import { freezeProjectContext } from './context.js'
 import { UnsupportedProjectError } from './errors.js'
+import { loadManifest } from './manifest.js'
 import type { PackageJson, ProjectContext } from './types.js'
 
 const execFileAsync = promisify(execFile)
@@ -165,10 +166,11 @@ export async function detectProject(cwd: string): Promise<ProjectContext> {
   await assertSinglePackageWorkspace(root)
 
   const app = await detectNextApp(root)
+  const manifest = await loadManifest(root)
   return freezeProjectContext({
     ...app,
     adapter: 'next-app',
-    manifest: null,
+    manifest,
     packageJson,
     packageJsonPath,
     packageManager: { name: 'pnpm', version: packageManagerMatch[1] },
