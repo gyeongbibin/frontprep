@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { FileSystem } from '../../src/core/filesystem.js'
-import { scriptIntent } from '../../src/core/intents.js'
+import { configFragmentIntent, scriptIntent } from '../../src/core/intents.js'
 import { buildPlan } from '../../src/core/plan-builder.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import { qualityModule } from '../../src/modules/quality.js'
@@ -500,7 +500,7 @@ describe('quality module', () => {
     expect(result.issues).toEqual(
       expect.arrayContaining([
         {
-          message: 'ESLint configuration conflicts at eslint.config.mjs.',
+          message: 'Managed Quality configuration is missing or changed.',
           path: 'eslint.config.mjs',
         },
         {
@@ -508,6 +508,45 @@ describe('quality module', () => {
           path: 'package.json',
         },
       ]),
+    )
+  })
+
+  it('accepts a first-run Prettier config composed with Tailwind', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const analysis = await qualityModule.analyze(context)
+    const qualityIntents = await qualityModule.plan(context, analysis)
+    const plan = await buildPlan(context, [
+      ...qualityIntents,
+      configFragmentIntent(
+        'tailwind',
+        'prettier',
+        { plugins: ['prettier-plugin-tailwindcss'] },
+        'Tailwind sorts utility classes.',
+      ),
+    ])
+    await applyOperations(project.root, plan.operations)
+
+    const updatedContext = await detectProject(project.root)
+    const result = await qualityModule.verify(updatedContext)
+
+    expect(result).toEqual({ issues: [], valid: true })
+  })
+
+  it('rejects a symlinked nested package configuration without following it', async () => {
+    const project = await createProject()
+    await writeFile(
+      join(project.root, 'shared-package.json'),
+      '{"prettier":{"semi":true}}\n',
+    )
+    await symlink(
+      '../shared-package.json',
+      join(project.root, 'src/package.json'),
+    )
+    const context = await detectProject(project.root)
+
+    await expect(qualityModule.analyze(context)).rejects.toThrow(
+      'Nested package configuration could not be inspected.',
     )
   })
 })

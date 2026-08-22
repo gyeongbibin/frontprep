@@ -165,7 +165,8 @@ JavaScript.
   configuration keys are detected below the project root. Generated trees
   (`.git`, `.next`, `.turbo`, `.worktrees`, `build`, `coverage`, `dist`,
   `node_modules`, and `out`) are excluded, and symbolic-link directories are
-  never followed.
+  never followed. A configuration file or nested `package.json` symbolic link
+  is reported as a conflict without following the link.
 - Existing `.prettierignore` content is retained and missing required lines are
   appended once.
 
@@ -201,12 +202,16 @@ first failure. It checks:
    composer's static ESM shape, without importing the file;
 6. `.prettierignore` contains every required line exactly once or more.
 
-The analyzer and verifier share the same non-executing configuration-conflict
-scanner. Verification converts per-path filesystem and parse failures into
-issues and continues, so one unreadable or non-regular path cannot hide
-independent dependency, script, or file failures. Once a manifest exists, core
-structural verification still requires the exact final composed
-`frontprep:check` command recorded by the transaction.
+The analyzer and verifier share the same non-executing scanner for alternate,
+nested, and package-level conflicts. Full canonical-byte ownership is checked
+only during analysis. Verification checks the managed ESLint and EditorConfig
+files directly and recognizes the required Prettier base properties inside a
+legitimate shared composition such as Tailwind's plugin fragment. Verification
+also converts per-path filesystem and parse failures into issues and continues,
+so one unreadable or non-regular path cannot hide independent dependency,
+script, or file failures. Once a manifest exists, core structural verification
+still requires the exact final composed `frontprep:check` command recorded by
+the transaction.
 
 Core structural verification additionally checks manifest fingerprints and
 all recorded managed scripts.
@@ -225,4 +230,6 @@ Module tests cover:
   properties, ignore lines, wrong file modes, and non-regular paths;
 - a later module appending to `frontprep:check`, including duplicate Quality
   stage rejection;
-- root, nested, package-level, and post-install configuration conflicts.
+- root, nested, package-level, and post-install configuration conflicts;
+- first-run Prettier composition with the Tailwind fragment and symlinked
+  configuration rejection.

@@ -216,6 +216,13 @@ async function findNestedConfigurations(
       if (tool !== undefined && (entry.isFile() || entry.isSymbolicLink())) {
         configurations.push(configurationConflict(tool, projectPath))
       }
+      if (entry.name === 'package.json' && entry.isSymbolicLink()) {
+        configurations.push({
+          message: 'Nested package configuration could not be inspected.',
+          path: projectPath,
+        })
+        continue
+      }
       if (entry.name === 'package.json' && entry.isFile()) {
         try {
           const bytes = await fileSystem.read(toProjectPath(projectPath))
@@ -269,6 +276,7 @@ async function safeSnapshot(
 
 async function findConfigurationConflicts(
   context: ProjectContext,
+  includeCanonicalOwnershipConflicts: boolean,
 ): Promise<readonly VerificationIssue[]> {
   const issues: VerificationIssue[] = []
   const fileSystem = new FileSystem(context.root)
@@ -285,22 +293,27 @@ async function findConfigurationConflicts(
       )
     }
   }
-  for (const [path, tool, expected] of canonicalConfigs()) {
-    const snapshot = await safeSnapshot(fileSystem, path)
-    if (snapshot === null) {
+  if (includeCanonicalOwnershipConflicts) {
+    for (const [path, tool, expected] of canonicalConfigs()) {
+      const snapshot = await safeSnapshot(fileSystem, path)
+      if (snapshot === null) {
+        issues.push(configurationConflict(tool, path))
+        continue
+      }
+      if (!snapshot.exists || snapshot.bytes?.equals(Buffer.from(expected))) {
+        continue
+      }
+
+      const recorded = context.manifest?.files[path]
+      if (
+        recorded?.ownership === 'managed' &&
+        recorded.hash === snapshot.hash
+      ) {
+        continue
+      }
+
       issues.push(configurationConflict(tool, path))
-      continue
     }
-    if (!snapshot.exists || snapshot.bytes?.equals(Buffer.from(expected))) {
-      continue
-    }
-
-    const recorded = context.manifest?.files[path]
-    if (recorded?.ownership === 'managed' && recorded.hash === snapshot.hash) {
-      continue
-    }
-
-    issues.push(configurationConflict(tool, path))
   }
   issues.push(...(await findNestedConfigurations(context)))
   return Object.freeze(issues)
@@ -406,7 +419,7 @@ export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
   id: MODULE_ID,
   version: '1.0.0',
   async analyze(context: ProjectContext): Promise<QualityAnalysis> {
-    const conflicts = await findConfigurationConflicts(context)
+    const conflicts = await findConfigurationConflicts(context, true)
     const first = conflicts[0]
     if (first !== undefined) {
       throw new ConflictError(first.message, first.path, MODULE_ID)
@@ -418,7 +431,7 @@ export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
   },
   async verify(context: ProjectContext): Promise<VerificationResult> {
     const issues: VerificationIssue[] = [
-      ...(await findConfigurationConflicts(context)),
+      ...(await findConfigurationConflicts(context, false)),
     ]
     for (const [name, expected] of DEPENDENCIES) {
       const actual = declaredRange(context, name)
