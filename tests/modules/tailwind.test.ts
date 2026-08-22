@@ -10,12 +10,86 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import {
+  createCommandServices,
+  runInit,
+  type CommandReporter,
+} from '../../src/commands/init.js'
 import { FileSystem } from '../../src/core/filesystem.js'
 import { buildPlan } from '../../src/core/plan-builder.js'
 import { detectProject } from '../../src/core/project-detector.js'
+import {
+  applyPlan,
+  type PackageManagerService,
+} from '../../src/core/transaction.js'
+import type { ModuleId } from '../../src/core/types.js'
 import { qualityModule } from '../../src/modules/quality.js'
 import { tailwindModule } from '../../src/modules/tailwind.js'
+import type { SetupModule } from '../../src/modules/types.js'
 import { createProject } from '../helpers/project.js'
+
+class SilentReporter implements CommandReporter {
+  alreadyApplied(): void {}
+  detected(): void {}
+  filesChanged(): void {}
+  header(): void {}
+  modulePassed(): void {}
+  noFilesChanged(): void {}
+  projectPassed(): void {}
+}
+
+class RecordingPackageManager implements PackageManagerService {
+  installs = 0
+  supportedChecks = 0
+
+  async assertSupported(): Promise<void> {
+    this.supportedChecks += 1
+  }
+
+  async install(): Promise<void> {
+    this.installs += 1
+  }
+}
+
+function passiveModule(id: ModuleId): SetupModule<null> {
+  return {
+    id,
+    version: '1.0.0',
+    async analyze() {
+      return null
+    },
+    async plan() {
+      return []
+    },
+    async verify() {
+      return { issues: [], valid: true }
+    },
+  }
+}
+
+function tailwindCommandServices(
+  packageManager: PackageManagerService,
+  runProjectCheck: () => Promise<void> = async () => undefined,
+) {
+  const base = createCommandServices(new SilentReporter(), [
+    qualityModule,
+    tailwindModule,
+    passiveModule('test'),
+    passiveModule('git-hooks'),
+    passiveModule('ci'),
+  ])
+  return {
+    ...base,
+    applyPlan: (context, plan, services) =>
+      applyPlan(context, plan, {
+        ...services,
+        assertGitState: async () => undefined,
+        packageManager,
+      }),
+    assertSafeGitState: async () => undefined,
+    runProjectCheck,
+  } satisfies typeof base
+}
 
 async function applyOperations(
   root: string,
@@ -230,14 +304,55 @@ describe('tailwind module', () => {
       const context = await detectProject(project.root)
 
       await expect(tailwindModule.analyze(context)).rejects.toThrow(
-        'Utility path must be a real directory: src/utils.',
+        kind === 'symbolic link'
+          ? 'Utility path contains a symbolic link: src/utils.'
+          : 'Utility path must be a real directory: src/utils.',
       )
     },
   )
 
+  it('rejects a utility directory reached through an ancestor symbolic link', async () => {
+    const project = await createProject()
+    await mkdir(join(project.root, 'src/shared-target/utils'), {
+      recursive: true,
+    })
+    await symlink('shared-target', join(project.root, 'src/shared'))
+    const context = await detectProject(project.root)
+
+    await expect(tailwindModule.analyze(context)).rejects.toThrow(
+      'Utility path contains a symbolic link: src/shared.',
+    )
+  })
+
+  it('stops init before writing through a utility ancestor symbolic link', async () => {
+    const project = await createProject()
+    await mkdir(join(project.root, 'src/shared-target/utils'), {
+      recursive: true,
+    })
+    await symlink('shared-target', join(project.root, 'src/shared'))
+    const originalPackage = await readFile(
+      join(project.root, 'package.json'),
+      'utf8',
+    )
+    const packageManager = new RecordingPackageManager()
+
+    await expect(
+      runInit({ cwd: project.root }, tailwindCommandServices(packageManager)),
+    ).rejects.toThrow('Utility path contains a symbolic link: src/shared.')
+
+    expect(packageManager.installs).toBe(0)
+    expect(await readFile(join(project.root, 'package.json'), 'utf8')).toBe(
+      originalPackage,
+    )
+    await expect(
+      readFile(join(project.root, 'src/shared-target/utils/cn.ts')),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it.each([
     ['postcss.config.js', 'PostCSS'],
     ['.postcssrc', 'PostCSS'],
+    ['.postcssrc.backup', 'PostCSS'],
     ['tailwind.config.ts', 'Legacy Tailwind'],
   ])('rejects conflicting %s configuration', async (path, tool) => {
     const project = await createProject()
@@ -271,6 +386,14 @@ describe('tailwind module', () => {
     ],
     [
       "@import 'tailwindcss';\nbody {}\n",
+      'Tailwind stylesheet import is not canonical.',
+    ],
+    [
+      '@import url(tailwindcss);\nbody {}\n',
+      'Tailwind stylesheet import is not canonical.',
+    ],
+    [
+      '@IMPORT/**/ URL( tailwindcss );\nbody {}\n',
       'Tailwind stylesheet import is not canonical.',
     ],
     [
@@ -312,6 +435,15 @@ describe('tailwind module', () => {
     "export { cn as mergeClasses } from './cn'\n",
     "export { cva } from 'class-variance-authority'\n",
     'export type VariantProps = string\n',
+    `/*
+export { cva, type VariantProps } from 'class-variance-authority'
+export { cn } from './cn'
+*/
+`,
+    `export { cva, type VariantProps } from 'class-variance-authority'
+export { cva, type VariantProps } from 'class-variance-authority'
+export { cn } from './cn'
+`,
   ])('rejects a conflicting utility barrel symbol', async (contents) => {
     const project = await createProject()
     await mkdir(join(project.root, 'src/shared/utils'), { recursive: true })
@@ -358,6 +490,69 @@ describe('tailwind module', () => {
     expect(secondPlan.operations).toEqual([])
   })
 
+  it('completes a real init transaction with an injected module registry', async () => {
+    const project = await createProject()
+    const packageManager = new RecordingPackageManager()
+
+    const result = await runInit(
+      { cwd: project.root },
+      tailwindCommandServices(packageManager),
+    )
+
+    expect(result.changed).toBe(true)
+    expect(packageManager.supportedChecks).toBe(1)
+    expect(packageManager.installs).toBe(1)
+    expect(result.manifest?.modules).toMatchObject({
+      quality: '1.0.0',
+      tailwind: '1.0.0',
+    })
+    expect(
+      await readFile(join(project.root, 'postcss.config.mjs'), 'utf8'),
+    ).toContain("'@tailwindcss/postcss': {}")
+    expect(
+      await readFile(join(project.root, 'src/shared/utils/cn.ts'), 'utf8'),
+    ).toContain('export function cn')
+    expect(
+      await readFile(join(project.root, '.frontprep.json'), 'utf8'),
+    ).toContain('"tailwind": "1.0.0"')
+  })
+
+  it('rolls back Tailwind files when project verification fails', async () => {
+    const project = await createProject()
+    const originalPackage = await readFile(
+      join(project.root, 'package.json'),
+      'utf8',
+    )
+    const originalStylesheet = await readFile(
+      join(project.root, 'src/app/globals.css'),
+      'utf8',
+    )
+    const packageManager = new RecordingPackageManager()
+    const services = tailwindCommandServices(packageManager, async () => {
+      throw new Error('project verification failed')
+    })
+
+    await expect(runInit({ cwd: project.root }, services)).rejects.toThrow(
+      'project verification failed',
+    )
+
+    expect(await readFile(join(project.root, 'package.json'), 'utf8')).toBe(
+      originalPackage,
+    )
+    expect(
+      await readFile(join(project.root, 'src/app/globals.css'), 'utf8'),
+    ).toBe(originalStylesheet)
+    await expect(
+      readFile(join(project.root, 'postcss.config.mjs')),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(
+      readFile(join(project.root, 'src/shared/utils/cn.ts')),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(
+      readFile(join(project.root, '.frontprep.json')),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('accepts a canonical first-line import in an existing CRLF stylesheet', async () => {
     const project = await createProject()
     await writeFile(
@@ -378,6 +573,64 @@ describe('tailwind module', () => {
 
     expect(result).toEqual({ issues: [], valid: true })
   })
+
+  it('rejects a noncanonical Tailwind import added after installation', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const qualityAnalysis = await qualityModule.analyze(context)
+    const tailwindAnalysis = await tailwindModule.analyze(context)
+    const plan = await buildPlan(context, [
+      ...(await qualityModule.plan(context, qualityAnalysis)),
+      ...(await tailwindModule.plan(context, tailwindAnalysis)),
+    ])
+    await applyOperations(project.root, plan.operations)
+    await writeFile(
+      join(project.root, 'src/app/globals.css'),
+      '@import "tailwindcss";\n@import url(tailwindcss);\nbody {}\n',
+    )
+
+    const updatedContext = await detectProject(project.root)
+    const result = await tailwindModule.verify(updatedContext)
+
+    expect(result.issues).toContainEqual({
+      message: 'Tailwind stylesheet import is missing or changed.',
+      path: 'src/app/globals.css',
+    })
+  })
+
+  it.each([
+    `/*
+export { cva, type VariantProps } from 'class-variance-authority'
+export { cn } from './cn'
+*/
+`,
+    `export { cva, type VariantProps } from 'class-variance-authority'
+export { cva, type VariantProps } from 'class-variance-authority'
+export { cn } from './cn'
+`,
+  ])(
+    'does not verify commented or duplicate required barrel exports',
+    async (contents) => {
+      const project = await createProject()
+      const context = await detectProject(project.root)
+      const qualityAnalysis = await qualityModule.analyze(context)
+      const tailwindAnalysis = await tailwindModule.analyze(context)
+      const plan = await buildPlan(context, [
+        ...(await qualityModule.plan(context, qualityAnalysis)),
+        ...(await tailwindModule.plan(context, tailwindAnalysis)),
+      ])
+      await applyOperations(project.root, plan.operations)
+      await writeFile(join(project.root, 'src/shared/utils/index.ts'), contents)
+
+      const updatedContext = await detectProject(project.root)
+      const result = await tailwindModule.verify(updatedContext)
+
+      expect(result.issues).toContainEqual({
+        message: 'Required utility barrel exports are missing or changed.',
+        path: 'src/shared/utils/index.ts',
+      })
+    },
+  )
 
   it('aggregates independent verification failures', async () => {
     const project = await createProject()
@@ -446,6 +699,44 @@ export default unrelated
       path: 'prettier.config.mjs',
     })
   })
+
+  it.each([
+    [
+      "  plugins: ['prettier-plugin-tailwindcss'],",
+      "  plugins: ['prettier-plugin-tailwindcss'],\n  plugins: [],",
+    ],
+    [
+      "  tailwindStylesheet: './src/app/globals.css',",
+      "  tailwindStylesheet: './src/app/globals.css',\n  tailwindStylesheet: './wrong.css',",
+    ],
+  ])(
+    'rejects duplicate effective Tailwind Prettier properties',
+    async (property, replacement) => {
+      const project = await createProject()
+      const context = await detectProject(project.root)
+      const qualityAnalysis = await qualityModule.analyze(context)
+      const tailwindAnalysis = await tailwindModule.analyze(context)
+      const plan = await buildPlan(context, [
+        ...(await qualityModule.plan(context, qualityAnalysis)),
+        ...(await tailwindModule.plan(context, tailwindAnalysis)),
+      ])
+      await applyOperations(project.root, plan.operations)
+      const prettierPath = join(project.root, 'prettier.config.mjs')
+      const prettierConfig = await readFile(prettierPath, 'utf8')
+      await writeFile(
+        prettierPath,
+        prettierConfig.replace(property, replacement),
+      )
+
+      const updatedContext = await detectProject(project.root)
+      const result = await tailwindModule.verify(updatedContext)
+
+      expect(result.issues).toContainEqual({
+        message: 'Tailwind Prettier configuration is missing or changed.',
+        path: 'prettier.config.mjs',
+      })
+    },
+  )
 
   it('reports changed managed modes and post-install conflicts together', async () => {
     const project = await createProject()

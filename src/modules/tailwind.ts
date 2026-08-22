@@ -1,4 +1,4 @@
-import { lstat } from 'node:fs/promises'
+import { lstat, readdir } from 'node:fs/promises'
 import { join, posix } from 'node:path'
 
 import { intersects, validRange } from 'semver'
@@ -128,11 +128,45 @@ function utilityCandidates(context: ProjectContext): readonly string[] {
   )
 }
 
+async function symbolicLinkComponent(
+  root: string,
+  path: string,
+): Promise<string | null> {
+  let current = root
+  const traversed: string[] = []
+  for (const segment of path.split('/')) {
+    traversed.push(segment)
+    current = join(current, segment)
+    try {
+      if ((await lstat(current)).isSymbolicLink()) {
+        return traversed.join('/')
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      const inspectedPath = traversed.join('/')
+      throw new ConflictError(
+        `Utility path could not be inspected: ${inspectedPath}.`,
+        inspectedPath,
+        MODULE_ID,
+      )
+    }
+  }
+  return null
+}
+
 async function selectUtilityDirectory(
   context: ProjectContext,
 ): Promise<string> {
   const existing: string[] = []
   for (const candidate of utilityCandidates(context)) {
+    const linkedComponent = await symbolicLinkComponent(context.root, candidate)
+    if (linkedComponent !== null) {
+      throw new ConflictError(
+        `Utility path contains a symbolic link: ${linkedComponent}.`,
+        linkedComponent,
+        MODULE_ID,
+      )
+    }
     const metadata = await pathMetadata(context.root, candidate)
     if (metadata === 'other') {
       throw new ConflictError(
@@ -169,7 +203,18 @@ async function configurationConflicts(
   context: ProjectContext,
 ): Promise<readonly VerificationIssue[]> {
   const issues: VerificationIssue[] = []
-  for (const path of ALTERNATE_POSTCSS_CONFIGS) {
+  const postcssPaths = new Set<string>(ALTERNATE_POSTCSS_CONFIGS)
+  try {
+    for (const entry of await readdir(context.root)) {
+      if (entry.startsWith('.postcssrc')) postcssPaths.add(entry)
+    }
+  } catch {
+    issues.push({
+      message: 'PostCSS configuration directory could not be inspected.',
+      path: '.',
+    })
+  }
+  for (const path of [...postcssPaths].sort()) {
     if ((await pathMetadata(context.root, path)) !== 'missing') {
       issues.push({
         message: `PostCSS configuration conflicts at ${path}.`,
@@ -207,14 +252,19 @@ function stylesheetConflict(contents: string): string | null {
   const canonicalIndexes = lines.flatMap((line, index) =>
     line === CANONICAL_CSS_IMPORT ? [index] : [],
   )
-  const tailwindImportIndexes = lines.flatMap((line, index) =>
-    /^\s*@import\s+(?:url\(\s*)?["']tailwindcss["']/u.test(line) ? [index] : [],
+  const withoutComments = contents.replace(/\/\*[\s\S]*?\*\//gu, (comment) =>
+    comment.replace(/[^\r\n]/gu, ' '),
   )
+  const tailwindImports = [
+    ...withoutComments.matchAll(
+      /(?:^|[;}])\s*@import\s+(?:["']tailwindcss["']|url\(\s*(?:["']tailwindcss["']|tailwindcss)\s*\))/giu,
+    ),
+  ]
 
   if (canonicalIndexes.length > 1) {
     return 'Tailwind stylesheet import is duplicated.'
   }
-  if (tailwindImportIndexes.length > canonicalIndexes.length) {
+  if (tailwindImports.length > canonicalIndexes.length) {
     return 'Tailwind stylesheet import is not canonical.'
   }
   if (canonicalIndexes.length === 1 && canonicalIndexes[0] !== 0) {
@@ -223,23 +273,117 @@ function stylesheetConflict(contents: string): string | null {
   return null
 }
 
-function missingBarrelExports(contents: string): readonly string[] {
-  const lines = contents.split(/\r?\n/u)
-  return Object.freeze(BARREL_EXPORTS.filter((line) => !lines.includes(line)))
+function stripTypeScriptComments(contents: string): string {
+  let result = ''
+  let index = 0
+  let state: 'block' | 'code' | 'double' | 'line' | 'single' | 'template' =
+    'code'
+  while (index < contents.length) {
+    const character = contents[index]!
+    const next = contents[index + 1]
+    if (state === 'line') {
+      if (character === '\n' || character === '\r') {
+        result += character
+        state = 'code'
+      } else {
+        result += ' '
+      }
+      index += 1
+      continue
+    }
+    if (state === 'block') {
+      if (character === '*' && next === '/') {
+        result += '  '
+        index += 2
+        state = 'code'
+      } else {
+        result += character === '\n' || character === '\r' ? character : ' '
+        index += 1
+      }
+      continue
+    }
+    if (state === 'template') {
+      if (character === '\\' && next !== undefined) {
+        result += '  '
+        index += 2
+      } else if (character === '`') {
+        result += ' '
+        index += 1
+        state = 'code'
+      } else {
+        result += character === '\n' || character === '\r' ? character : ' '
+        index += 1
+      }
+      continue
+    }
+    if (state === 'single' || state === 'double') {
+      result += character
+      if (character === '\\' && next !== undefined) {
+        result += next
+        index += 2
+      } else {
+        if (
+          (state === 'single' && character === "'") ||
+          (state === 'double' && character === '"')
+        ) {
+          state = 'code'
+        }
+        index += 1
+      }
+      continue
+    }
+
+    if (character === '/' && next === '/') {
+      result += '  '
+      index += 2
+      state = 'line'
+    } else if (character === '/' && next === '*') {
+      result += '  '
+      index += 2
+      state = 'block'
+    } else if (character === "'") {
+      result += character
+      index += 1
+      state = 'single'
+    } else if (character === '"') {
+      result += character
+      index += 1
+      state = 'double'
+    } else if (character === '`') {
+      result += ' '
+      index += 1
+      state = 'template'
+    } else {
+      result += character
+      index += 1
+    }
+  }
+  return result
 }
 
-function barrelHasConflict(contents: string): boolean {
-  let remaining = contents
-  for (const line of BARREL_EXPORTS) {
-    remaining = remaining
-      .split(/\r?\n/u)
-      .filter((candidate) => candidate !== line)
-      .join('\n')
+function analyzeBarrel(contents: string): {
+  conflict: boolean
+  missing: readonly string[]
+} {
+  const rawLines = contents.split(/\r?\n/u)
+  const activeLines = stripTypeScriptComments(contents).split(/\r?\n/u)
+  let conflict = false
+  const missing: string[] = []
+  for (const requiredLine of BARREL_EXPORTS) {
+    const activeCount = activeLines.filter(
+      (line) => line === requiredLine,
+    ).length
+    const rawCount = rawLines.filter((line) => line === requiredLine).length
+    if (activeCount === 0) missing.push(requiredLine)
+    if (activeCount > 1 || rawCount > activeCount) conflict = true
   }
-  const withoutComments = remaining
-    .replace(/\/\*[\s\S]*?\*\//gu, '')
-    .replace(/\/\/.*$/gmu, '')
-  return /\b(?:cn|cva|VariantProps)\b/u.test(withoutComments)
+
+  const remaining = activeLines
+    .filter((line) => !BARREL_EXPORTS.includes(line))
+    .join('\n')
+    .replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/gu, '')
+  if (/\b(?:cn|cva|VariantProps)\b/u.test(remaining)) conflict = true
+  return { conflict, missing: Object.freeze(missing) }
 }
 
 async function assertManagedFileCompatible(
@@ -265,14 +409,19 @@ function relativeImport(fromPath: string, toPath: string): string {
   return value.startsWith('.') ? value : `./${value}`
 }
 
-function propertyArray(contents: string, property: string): readonly string[] {
+function propertyArray(
+  contents: string,
+  property: string,
+): readonly string[] | null {
   const escapedProperty = property.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
-  const match = contents.match(
-    new RegExp(`^\\s*${escapedProperty}:\\s*\\[([^\\]]*)\\],\\s*$`, 'mu'),
-  )
-  if (match?.[1] === undefined) return []
+  const matches = [
+    ...contents.matchAll(
+      new RegExp(`^\\s*${escapedProperty}:\\s*\\[([^\\]]*)\\],\\s*$`, 'gmu'),
+    ),
+  ]
+  if (matches.length !== 1 || matches[0]?.[1] === undefined) return null
   return Object.freeze(
-    [...match[1].matchAll(/['"]([^'"]+)['"]/gu)].flatMap((item) =>
+    [...matches[0][1].matchAll(/['"]([^'"]+)['"]/gu)].flatMap((item) =>
       item[1] === undefined ? [] : [item[1]],
     ),
   )
@@ -297,14 +446,16 @@ function hasTailwindPrettierConfiguration(
   }
   const plugins = propertyArray(contents, 'plugins')
   const functions = propertyArray(contents, 'tailwindFunctions')
+  const stylesheetLines = contents
+    .split('\n')
+    .filter((line) => /^\s*tailwindStylesheet:/u.test(line))
   return (
+    plugins !== null &&
+    functions !== null &&
     plugins.includes('prettier-plugin-tailwindcss') &&
     ['clsx', 'cn', 'cva'].every((name) => functions.includes(name)) &&
-    contents
-      .split('\n')
-      .some(
-        (line) => line.trim() === `tailwindStylesheet: './${stylesheetPath}',`,
-      )
+    stylesheetLines.length === 1 &&
+    stylesheetLines[0]?.trim() === `tailwindStylesheet: './${stylesheetPath}',`
   )
 }
 
@@ -388,7 +539,8 @@ export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
       )
     }
     const barrelContents = barrelSnapshot.bytes?.toString('utf8') ?? ''
-    if (barrelHasConflict(barrelContents)) {
+    const barrelAnalysis = analyzeBarrel(barrelContents)
+    if (barrelAnalysis.conflict) {
       throw new ConflictError(
         'Utility barrel has a conflicting required symbol.',
         barrelPath,
@@ -400,7 +552,7 @@ export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
       layoutImportValue: context.stylesheetNeedsImport
         ? relativeImport(context.layoutPath, context.stylesheetPath)
         : null,
-      missingBarrelExports: missingBarrelExports(barrelContents),
+      missingBarrelExports: barrelAnalysis.missing,
       stylesheetPath: context.stylesheetPath,
       utilsDirectory,
     })
@@ -595,11 +747,12 @@ export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
     const barrelPath = posix.join(utilsDirectory, 'index.ts')
     const barrelSnapshot = await safeSnapshot(fileSystem, barrelPath)
     const barrelContents = barrelSnapshot?.bytes?.toString('utf8') ?? ''
+    const barrelAnalysis = analyzeBarrel(barrelContents)
     if (
       barrelSnapshot === null ||
       !barrelSnapshot.exists ||
-      missingBarrelExports(barrelContents).length > 0 ||
-      barrelHasConflict(barrelContents)
+      barrelAnalysis.missing.length > 0 ||
+      barrelAnalysis.conflict
     ) {
       issues.push({
         message: 'Required utility barrel exports are missing or changed.',

@@ -59,8 +59,9 @@ Tailwind inspects these candidates in order:
 
 If exactly one candidate already exists as a real directory, Tailwind uses it.
 If none exists, it creates `<source-root>/shared/utils`. If multiple candidates
-exist, or a candidate is a symbolic link or non-directory entry, analysis
-fails rather than guessing or following the link.
+exist, or a candidate or any of its path components is a symbolic link or
+non-directory entry, analysis fails rather than guessing or following the
+link.
 
 This produces `src/shared/utils` by default for a `src/app` project and
 `shared/utils` by default for an `app` project.
@@ -86,8 +87,8 @@ export default config
 Tailwind patches the stylesheet reported by the core adapter with exactly one
 canonical first-line import:
 
-```css
-@import 'tailwindcss';
+```text
+@import "tailwindcss";
 ```
 
 Existing CSS after the import is preserved, including `@theme`, `@source`,
@@ -161,13 +162,16 @@ consumer JavaScript or TypeScript.
   not silently migrate JavaScript configuration.
 - A stylesheet with no Tailwind import is patchable. Exactly one canonical
   import is compatible. Duplicate imports, a noncanonical import targeting
-  `tailwindcss`, or legacy `@tailwind base`, `@tailwind components`, or
-  `@tailwind utilities` directives are conflicts.
+  `tailwindcss` (including quoted and unquoted `url()` forms), or legacy
+  `@tailwind base`, `@tailwind components`, or `@tailwind utilities`
+  directives are conflicts.
 - A root layout that already imports the detected stylesheet is preserved. If
   the adapter marks the import as missing, a static relative import is added.
-- An exact required barrel line is compatible. When a required symbol is
-  absent, its canonical line is appended. A noncanonical declaration or export
-  of a required symbol is a conflict so Frontprep cannot create a duplicate.
+- Each exact, active required barrel line must occur at most once. Comments do
+  not count as exports. When a required symbol is absent, its canonical line is
+  appended. A commented canonical line, duplicate line, or noncanonical
+  declaration or export of a required symbol is a conflict so Frontprep cannot
+  create or approve a duplicate.
 - Symbolic links are not followed for canonical files, stylesheets, layouts,
   or utility candidates. An unreadable or non-regular required path is a
   conflict.
@@ -206,7 +210,8 @@ first failure. It checks:
 6. the utility barrel contains both canonical export lines and no conflicting
    required-symbol declaration;
 7. `prettier.config.mjs` contains the plugin, class functions, and detected
-   stylesheet in the core composer's static ESM shape without importing it;
+   stylesheet exactly once in the core composer's static ESM shape without
+   importing it;
 8. no alternate PostCSS, legacy Tailwind, package-level, symbolic-link, or
    ambiguous utility-directory conflict appeared after installation.
 
@@ -230,6 +235,8 @@ Module tests cover:
   PostCSS, legacy Tailwind configuration, legacy directives, duplicate or
   noncanonical CSS imports, and conflicting barrel symbols;
 - successful verification after applying the plan;
+- successful and rollback-producing `runInit` transactions with an injected
+  five-module registry and package-manager service;
 - aggregated verification failures for dependencies, modes, managed files,
   stylesheet and layout linkage, utility exports, Prettier values, and
   post-install conflicts;
