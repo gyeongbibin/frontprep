@@ -131,6 +131,7 @@ function utilityCandidates(context: ProjectContext): readonly string[] {
 async function symbolicLinkComponent(
   root: string,
   path: string,
+  label: string,
 ): Promise<string | null> {
   let current = root
   const traversed: string[] = []
@@ -145,7 +146,7 @@ async function symbolicLinkComponent(
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
       const inspectedPath = traversed.join('/')
       throw new ConflictError(
-        `Utility path could not be inspected: ${inspectedPath}.`,
+        `${label} could not be inspected: ${inspectedPath}.`,
         inspectedPath,
         MODULE_ID,
       )
@@ -154,19 +155,31 @@ async function symbolicLinkComponent(
   return null
 }
 
+async function assertNoSymbolicLinkComponents(
+  root: string,
+  path: string,
+  label: string,
+): Promise<void> {
+  const linkedComponent = await symbolicLinkComponent(root, path, label)
+  if (linkedComponent !== null) {
+    throw new ConflictError(
+      `${label} contains a symbolic link: ${linkedComponent}.`,
+      linkedComponent,
+      MODULE_ID,
+    )
+  }
+}
+
 async function selectUtilityDirectory(
   context: ProjectContext,
 ): Promise<string> {
   const existing: string[] = []
   for (const candidate of utilityCandidates(context)) {
-    const linkedComponent = await symbolicLinkComponent(context.root, candidate)
-    if (linkedComponent !== null) {
-      throw new ConflictError(
-        `Utility path contains a symbolic link: ${linkedComponent}.`,
-        linkedComponent,
-        MODULE_ID,
-      )
-    }
+    await assertNoSymbolicLinkComponents(
+      context.root,
+      candidate,
+      'Utility path',
+    )
     const metadata = await pathMetadata(context.root, candidate)
     if (metadata === 'other') {
       throw new ConflictError(
@@ -239,12 +252,39 @@ async function configurationConflicts(
   return Object.freeze(issues)
 }
 
+function decodeCssEscapes(contents: string): string {
+  return contents.replace(
+    /\\([0-9a-fA-F]{1,6})(?:\r\n|[ \t\n\r\f])?|\\(\r\n|[\n\r\f])|\\(.)/gu,
+    (
+      _match,
+      hexadecimal: string | undefined,
+      newline: string | undefined,
+      escaped: string | undefined,
+    ) => {
+      if (hexadecimal !== undefined) {
+        const codePoint = Number.parseInt(hexadecimal, 16)
+        return codePoint === 0 || codePoint > 0x10ffff
+          ? '\uFFFD'
+          : String.fromCodePoint(codePoint)
+      }
+      if (newline !== undefined) return ''
+      return escaped ?? ''
+    },
+  )
+}
+
 function stylesheetConflict(contents: string): string | null {
   const lines = contents.split(/\r?\n/u)
+  const withoutComments = contents.replace(/\/\*[\s\S]*?\*\//gu, (comment) =>
+    comment.replace(/[^\r\n]/gu, ' '),
+  )
+  const normalized = decodeCssEscapes(withoutComments)
   if (
-    lines.some((line) =>
-      /^\s*@tailwind\s+(?:base|components|utilities)\s*;/u.test(line),
-    )
+    normalized
+      .split(/\r?\n/u)
+      .some((line) =>
+        /^\s*@tailwind\s+(?:base|components|utilities)\s*;/iu.test(line),
+      )
   ) {
     return 'Legacy Tailwind directives are not supported.'
   }
@@ -252,11 +292,8 @@ function stylesheetConflict(contents: string): string | null {
   const canonicalIndexes = lines.flatMap((line, index) =>
     line === CANONICAL_CSS_IMPORT ? [index] : [],
   )
-  const withoutComments = contents.replace(/\/\*[\s\S]*?\*\//gu, (comment) =>
-    comment.replace(/[^\r\n]/gu, ' '),
-  )
   const tailwindImports = [
-    ...withoutComments.matchAll(
+    ...normalized.matchAll(
       /(?:^|[;}])\s*@import\s+(?:["']tailwindcss["']|url\(\s*(?:["']tailwindcss["']|tailwindcss)\s*\))/giu,
     ),
   ]
@@ -414,14 +451,18 @@ function propertyArray(
   property: string,
 ): readonly string[] | null {
   const escapedProperty = property.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
-  const matches = [
+  const declarations = [
     ...contents.matchAll(
-      new RegExp(`^\\s*${escapedProperty}:\\s*\\[([^\\]]*)\\],\\s*$`, 'gmu'),
+      new RegExp(`^\\s*${escapedProperty}:\\s*(.+),\\s*$`, 'gmu'),
     ),
   ]
-  if (matches.length !== 1 || matches[0]?.[1] === undefined) return null
+  if (declarations.length !== 1 || declarations[0]?.[1] === undefined) {
+    return null
+  }
+  const array = declarations[0][1].match(/^\[(.*)\]$/u)
+  if (array?.[1] === undefined) return null
   return Object.freeze(
-    [...matches[0][1].matchAll(/['"]([^'"]+)['"]/gu)].flatMap((item) =>
+    [...array[1].matchAll(/['"]([^'"]+)['"]/gu)].flatMap((item) =>
       item[1] === undefined ? [] : [item[1]],
     ),
   )
@@ -485,6 +526,16 @@ export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
 
     const utilsDirectory = await selectUtilityDirectory(context)
     const fileSystem = new FileSystem(context.root)
+    await assertNoSymbolicLinkComponents(
+      context.root,
+      context.layoutPath,
+      'Root layout path',
+    )
+    await assertNoSymbolicLinkComponents(
+      context.root,
+      context.stylesheetPath,
+      'Stylesheet path',
+    )
     await assertManagedFileCompatible(
       fileSystem,
       'postcss.config.mjs',
@@ -642,6 +693,22 @@ export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
     const issues: VerificationIssue[] = [
       ...(await configurationConflicts(context)),
     ]
+    for (const [path, label] of [
+      [context.layoutPath, 'Root layout path'],
+      [context.stylesheetPath, 'Stylesheet path'],
+    ] as const) {
+      try {
+        await assertNoSymbolicLinkComponents(context.root, path, label)
+      } catch (error) {
+        issues.push({
+          message:
+            error instanceof Error
+              ? error.message
+              : `${label} could not be verified.`,
+          path,
+        })
+      }
+    }
     for (const [name, range] of [
       ...RUNTIME_DEPENDENCIES,
       ...DEVELOPMENT_DEPENDENCIES,

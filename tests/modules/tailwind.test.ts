@@ -260,7 +260,37 @@ describe('tailwind module', () => {
     const context = await detectProject(project.root)
 
     await expect(tailwindModule.analyze(context)).rejects.toThrow(
-      'Root layout must be a regular file: src/app/layout.tsx.',
+      'Root layout path contains a symbolic link: src/app/layout.tsx.',
+    )
+  })
+
+  it('rejects a root layout reached through an ancestor symbolic link', async () => {
+    const project = await createProject({ appDirectory: 'app' })
+    await rename(join(project.root, 'app'), join(project.root, 'app-target'))
+    await symlink('app-target', join(project.root, 'app'))
+    const context = await detectProject(project.root)
+
+    await expect(tailwindModule.analyze(context)).rejects.toThrow(
+      'Root layout path contains a symbolic link: app.',
+    )
+  })
+
+  it('rejects a stylesheet reached through an ancestor symbolic link', async () => {
+    const project = await createProject()
+    await mkdir(join(project.root, 'src/styles-target'), { recursive: true })
+    await writeFile(
+      join(project.root, 'src/styles-target/theme.css'),
+      'body {}\n',
+    )
+    await symlink('styles-target', join(project.root, 'src/styles'))
+    await writeFile(
+      join(project.root, 'src/app/layout.tsx'),
+      "import '../styles/theme.css'\n\nexport default function Layout() { return null }\n",
+    )
+    const context = await detectProject(project.root)
+
+    await expect(tailwindModule.analyze(context)).rejects.toThrow(
+      'Stylesheet path contains a symbolic link: src/styles.',
     )
   })
 
@@ -394,6 +424,14 @@ describe('tailwind module', () => {
     ],
     [
       '@IMPORT/**/ URL( tailwindcss );\nbody {}\n',
+      'Tailwind stylesheet import is not canonical.',
+    ],
+    [
+      '@import "\\74 ailwindcss";\nbody {}\n',
+      'Tailwind stylesheet import is not canonical.',
+    ],
+    [
+      '@\\69mport "tailwindcss";\nbody {}\n',
       'Tailwind stylesheet import is not canonical.',
     ],
     [
@@ -574,29 +612,36 @@ export { cn } from './cn'
     expect(result).toEqual({ issues: [], valid: true })
   })
 
-  it('rejects a noncanonical Tailwind import added after installation', async () => {
-    const project = await createProject()
-    const context = await detectProject(project.root)
-    const qualityAnalysis = await qualityModule.analyze(context)
-    const tailwindAnalysis = await tailwindModule.analyze(context)
-    const plan = await buildPlan(context, [
-      ...(await qualityModule.plan(context, qualityAnalysis)),
-      ...(await tailwindModule.plan(context, tailwindAnalysis)),
-    ])
-    await applyOperations(project.root, plan.operations)
-    await writeFile(
-      join(project.root, 'src/app/globals.css'),
-      '@import "tailwindcss";\n@import url(tailwindcss);\nbody {}\n',
-    )
+  it.each([
+    '@import url(tailwindcss);',
+    '@import "\\74 ailwindcss";',
+    '@\\69mport "tailwindcss";',
+  ])(
+    'rejects a noncanonical Tailwind import added after installation',
+    async (invalidImport) => {
+      const project = await createProject()
+      const context = await detectProject(project.root)
+      const qualityAnalysis = await qualityModule.analyze(context)
+      const tailwindAnalysis = await tailwindModule.analyze(context)
+      const plan = await buildPlan(context, [
+        ...(await qualityModule.plan(context, qualityAnalysis)),
+        ...(await tailwindModule.plan(context, tailwindAnalysis)),
+      ])
+      await applyOperations(project.root, plan.operations)
+      await writeFile(
+        join(project.root, 'src/app/globals.css'),
+        `@import "tailwindcss";\n${invalidImport}\nbody {}\n`,
+      )
 
-    const updatedContext = await detectProject(project.root)
-    const result = await tailwindModule.verify(updatedContext)
+      const updatedContext = await detectProject(project.root)
+      const result = await tailwindModule.verify(updatedContext)
 
-    expect(result.issues).toContainEqual({
-      message: 'Tailwind stylesheet import is missing or changed.',
-      path: 'src/app/globals.css',
-    })
-  })
+      expect(result.issues).toContainEqual({
+        message: 'Tailwind stylesheet import is missing or changed.',
+        path: 'src/app/globals.css',
+      })
+    },
+  )
 
   it.each([
     `/*
@@ -704,6 +749,14 @@ export default unrelated
     [
       "  plugins: ['prettier-plugin-tailwindcss'],",
       "  plugins: ['prettier-plugin-tailwindcss'],\n  plugins: [],",
+    ],
+    [
+      "  plugins: ['prettier-plugin-tailwindcss'],",
+      "  plugins: ['prettier-plugin-tailwindcss'],\n  plugins: undefined,",
+    ],
+    [
+      "  tailwindFunctions: ['clsx', 'cn', 'cva'],",
+      "  tailwindFunctions: ['clsx', 'cn', 'cva'],\n  tailwindFunctions: null,",
     ],
     [
       "  tailwindStylesheet: './src/app/globals.css',",

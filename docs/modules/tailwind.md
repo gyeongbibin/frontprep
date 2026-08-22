@@ -162,9 +162,9 @@ consumer JavaScript or TypeScript.
   not silently migrate JavaScript configuration.
 - A stylesheet with no Tailwind import is patchable. Exactly one canonical
   import is compatible. Duplicate imports, a noncanonical import targeting
-  `tailwindcss` (including quoted and unquoted `url()` forms), or legacy
-  `@tailwind base`, `@tailwind components`, or `@tailwind utilities`
-  directives are conflicts.
+  `tailwindcss` (including CSS-escaped targets and quoted or unquoted `url()`
+  forms), or legacy `@tailwind base`, `@tailwind components`, or
+  `@tailwind utilities` directives are conflicts.
 - A root layout that already imports the detected stylesheet is preserved. If
   the adapter marks the import as missing, a static relative import is added.
 - Each exact, active required barrel line must occur at most once. Comments do
