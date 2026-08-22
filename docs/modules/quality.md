@@ -161,6 +161,11 @@ JavaScript.
 - Alternate Prettier configuration (`.prettierrc*`, `prettier.config` with an
   extension other than `.mjs`, or `package.json#prettier`) is a conflict for the
   same reason.
+- The same file names, nested `.editorconfig` files, and nested package-level
+  configuration keys are detected below the project root. Generated trees
+  (`.git`, `.next`, `.turbo`, `.worktrees`, `build`, `coverage`, `dist`,
+  `node_modules`, and `out`) are excluded, and symbolic-link directories are
+  never followed.
 - Existing `.prettierignore` content is retained and missing required lines are
   appended once.
 
@@ -185,13 +190,23 @@ first failure. It checks:
 
 1. each dependency is declared with a valid range intersecting the requested
    range;
-2. every frontprep-owned script has its exact command;
+2. every frontprep-owned script has its exact command, except
+   `frontprep:check`, which must start with exactly one
+   `pnpm run frontprep:quality` stage and may contain later modules' appended
+   stages;
 3. every conventional alias exists, without replacing a preserved user
    command;
 4. `eslint.config.mjs` and `.editorconfig` have the canonical bytes and mode;
 5. `prettier.config.mjs` contains every required base property in the core
    composer's static ESM shape, without importing the file;
 6. `.prettierignore` contains every required line exactly once or more.
+
+The analyzer and verifier share the same non-executing configuration-conflict
+scanner. Verification converts per-path filesystem and parse failures into
+issues and continues, so one unreadable or non-regular path cannot hide
+independent dependency, script, or file failures. Once a manifest exists, core
+structural verification still requires the exact final composed
+`frontprep:check` command recorded by the transaction.
 
 Core structural verification additionally checks manifest fingerprints and
 all recorded managed scripts.
@@ -207,4 +222,7 @@ Module tests cover:
 - an idempotent exact canonical project;
 - successful verification after applying the plan;
 - aggregated verification failures for missing dependencies, scripts, config
-  properties, ignore lines, and wrong file modes.
+  properties, ignore lines, wrong file modes, and non-regular paths;
+- a later module appending to `frontprep:check`, including duplicate Quality
+  stage rejection;
+- root, nested, package-level, and post-install configuration conflicts.

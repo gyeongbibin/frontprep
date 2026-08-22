@@ -1,3 +1,6 @@
+import { readdir } from 'node:fs/promises'
+import { join, posix } from 'node:path'
+
 import { intersects, validRange } from 'semver'
 
 import {
@@ -12,7 +15,7 @@ import {
 } from '../core/intents.js'
 import { composePrettierConfig } from '../core/composers/prettier.js'
 import { ConflictError } from '../core/errors.js'
-import { FileSystem } from '../core/filesystem.js'
+import { FileSystem, type FileSnapshot } from '../core/filesystem.js'
 import { toProjectPath } from '../core/paths.js'
 import type { ProjectContext } from '../core/types.js'
 import type {
@@ -58,6 +61,25 @@ const PACKAGE_CONFIGS = Object.freeze([
   ['eslintConfig', 'ESLint'],
   ['prettier', 'Prettier'],
 ] as const)
+
+const CONFIG_FILE_TO_TOOL = new Map<string, string>([
+  ...ALTERNATE_CONFIGS.map(([path, tool]) => [path, tool] as const),
+  ['eslint.config.mjs', 'ESLint'],
+  ['prettier.config.mjs', 'Prettier'],
+  ['.editorconfig', 'EditorConfig'],
+])
+
+const IGNORED_SCAN_DIRECTORIES = new Set([
+  '.git',
+  '.next',
+  '.turbo',
+  '.worktrees',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out',
+])
 
 const ESLINT_CONFIG = `import { defineConfig, globalIgnores } from 'eslint/config'
 import nextVitals from 'eslint-config-next/core-web-vitals'
@@ -160,11 +182,144 @@ function canonicalConfigs(): readonly (readonly [string, string, string])[] {
   ])
 }
 
+async function findNestedConfigurations(
+  context: ProjectContext,
+): Promise<readonly VerificationIssue[]> {
+  const configurations: VerificationIssue[] = []
+  const fileSystem = new FileSystem(context.root)
+  const directories = ['']
+  while (directories.length > 0) {
+    const directory = directories.shift()!
+    let entries
+    try {
+      entries = await readdir(join(context.root, directory), {
+        withFileTypes: true,
+      })
+    } catch {
+      configurations.push({
+        message: 'Quality configuration directory could not be inspected.',
+        path: directory || '.',
+      })
+      continue
+    }
+    entries.sort((left, right) => left.name.localeCompare(right.name))
+    for (const entry of entries) {
+      const projectPath = posix.join(directory, entry.name)
+      if (entry.isDirectory()) {
+        if (!IGNORED_SCAN_DIRECTORIES.has(entry.name)) {
+          directories.push(projectPath)
+        }
+        continue
+      }
+      if (directory === '') continue
+      const tool = CONFIG_FILE_TO_TOOL.get(entry.name)
+      if (tool !== undefined && (entry.isFile() || entry.isSymbolicLink())) {
+        configurations.push(configurationConflict(tool, projectPath))
+      }
+      if (entry.name === 'package.json' && entry.isFile()) {
+        try {
+          const bytes = await fileSystem.read(toProjectPath(projectPath))
+          const packageJson = JSON.parse(
+            bytes?.toString('utf8') ?? '{}',
+          ) as Record<string, unknown>
+          for (const [key, packageTool] of PACKAGE_CONFIGS) {
+            if (Object.hasOwn(packageJson, key)) {
+              configurations.push(
+                configurationConflict(
+                  packageTool,
+                  `${projectPath}#${key}`,
+                  projectPath,
+                ),
+              )
+            }
+          }
+        } catch {
+          configurations.push({
+            message: 'Nested package configuration could not be inspected.',
+            path: projectPath,
+          })
+        }
+      }
+    }
+  }
+  return Object.freeze(configurations)
+}
+
+function configurationConflict(
+  tool: string,
+  displayPath: string,
+  path: string = displayPath,
+): VerificationIssue {
+  return {
+    message: `${tool} configuration conflicts at ${displayPath}.`,
+    path,
+  }
+}
+
+async function safeSnapshot(
+  fileSystem: FileSystem,
+  path: string,
+): Promise<FileSnapshot | null> {
+  try {
+    return await fileSystem.snapshot(toProjectPath(path))
+  } catch {
+    return null
+  }
+}
+
+async function findConfigurationConflicts(
+  context: ProjectContext,
+): Promise<readonly VerificationIssue[]> {
+  const issues: VerificationIssue[] = []
+  const fileSystem = new FileSystem(context.root)
+  for (const [path, tool] of ALTERNATE_CONFIGS) {
+    const snapshot = await safeSnapshot(fileSystem, path)
+    if (snapshot === null || snapshot.exists) {
+      issues.push(configurationConflict(tool, path))
+    }
+  }
+  for (const [key, tool] of PACKAGE_CONFIGS) {
+    if (Object.hasOwn(context.packageJson, key)) {
+      issues.push(
+        configurationConflict(tool, `package.json#${key}`, 'package.json'),
+      )
+    }
+  }
+  for (const [path, tool, expected] of canonicalConfigs()) {
+    const snapshot = await safeSnapshot(fileSystem, path)
+    if (snapshot === null) {
+      issues.push(configurationConflict(tool, path))
+      continue
+    }
+    if (!snapshot.exists || snapshot.bytes?.equals(Buffer.from(expected))) {
+      continue
+    }
+
+    const recorded = context.manifest?.files[path]
+    if (recorded?.ownership === 'managed' && recorded.hash === snapshot.hash) {
+      continue
+    }
+
+    issues.push(configurationConflict(tool, path))
+  }
+  issues.push(...(await findNestedConfigurations(context)))
+  return Object.freeze(issues)
+}
+
 function declaredRange(context: ProjectContext, name: string): string | null {
   return (
     context.packageJson.dependencies?.[name] ??
     context.packageJson.devDependencies?.[name] ??
     null
+  )
+}
+
+function hasQualityCheckStage(actual: string | undefined): boolean {
+  const qualityStage = 'pnpm run frontprep:quality'
+  const stages = actual?.split(' && ') ?? []
+  return (
+    stages[0] === qualityStage &&
+    stages.filter((stage) => stage === qualityStage).length === 1
   )
 }
 
@@ -251,44 +406,10 @@ export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
   id: MODULE_ID,
   version: '1.0.0',
   async analyze(context: ProjectContext): Promise<QualityAnalysis> {
-    const fileSystem = new FileSystem(context.root)
-    for (const [path, tool] of ALTERNATE_CONFIGS) {
-      if ((await fileSystem.snapshot(toProjectPath(path))).exists) {
-        throw new ConflictError(
-          `${tool} configuration conflicts at ${path}.`,
-          path,
-          MODULE_ID,
-        )
-      }
-    }
-    for (const [key, tool] of PACKAGE_CONFIGS) {
-      if (Object.hasOwn(context.packageJson, key)) {
-        throw new ConflictError(
-          `${tool} configuration conflicts at package.json#${key}.`,
-          'package.json',
-          MODULE_ID,
-        )
-      }
-    }
-    for (const [path, tool, expected] of canonicalConfigs()) {
-      const snapshot = await fileSystem.snapshot(toProjectPath(path))
-      if (!snapshot.exists || snapshot.bytes?.equals(Buffer.from(expected))) {
-        continue
-      }
-
-      const recorded = context.manifest?.files[path]
-      if (
-        recorded?.ownership === 'managed' &&
-        recorded.hash === snapshot.hash
-      ) {
-        continue
-      }
-
-      throw new ConflictError(
-        `${tool} configuration conflicts at ${path}.`,
-        path,
-        MODULE_ID,
-      )
+    const conflicts = await findConfigurationConflicts(context)
+    const first = conflicts[0]
+    if (first !== undefined) {
+      throw new ConflictError(first.message, first.path, MODULE_ID)
     }
     return Object.freeze({ eligible: true })
   },
@@ -296,7 +417,9 @@ export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
     return createIntents()
   },
   async verify(context: ProjectContext): Promise<VerificationResult> {
-    const issues: VerificationIssue[] = []
+    const issues: VerificationIssue[] = [
+      ...(await findConfigurationConflicts(context)),
+    ]
     for (const [name, expected] of DEPENDENCIES) {
       const actual = declaredRange(context, name)
       if (
@@ -313,7 +436,11 @@ export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
 
     for (const [name, command, policy] of SCRIPTS) {
       const actual = context.packageJson.scripts?.[name]
-      if (policy === 'owned' && actual !== command) {
+      const ownedScriptValid =
+        name === 'frontprep:check'
+          ? hasQualityCheckStage(actual)
+          : actual === command
+      if (policy === 'owned' && !ownedScriptValid) {
         issues.push({
           message: `Frontprep-owned script ${name} is missing or changed.`,
           path: 'package.json',
@@ -330,8 +457,9 @@ export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
     for (const [path, , expected] of canonicalConfigs().filter(
       ([path]) => path !== 'prettier.config.mjs',
     )) {
-      const snapshot = await fileSystem.snapshot(toProjectPath(path))
+      const snapshot = await safeSnapshot(fileSystem, path)
       if (
+        snapshot === null ||
         !snapshot.exists ||
         !snapshot.bytes?.equals(Buffer.from(expected)) ||
         snapshot.mode !== 0o644
@@ -343,10 +471,12 @@ export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
       }
     }
 
-    const prettierSnapshot = await fileSystem.snapshot(
-      toProjectPath('prettier.config.mjs'),
+    const prettierSnapshot = await safeSnapshot(
+      fileSystem,
+      'prettier.config.mjs',
     )
     if (
+      prettierSnapshot === null ||
       !prettierSnapshot.exists ||
       prettierSnapshot.mode !== 0o644 ||
       prettierSnapshot.bytes === null ||
@@ -358,11 +488,9 @@ export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
       })
     }
 
-    const ignoreSnapshot = await fileSystem.snapshot(
-      toProjectPath('.prettierignore'),
-    )
+    const ignoreSnapshot = await safeSnapshot(fileSystem, '.prettierignore')
     const ignoreLines = new Set(
-      ignoreSnapshot.bytes?.toString('utf8').split('\n') ?? [],
+      ignoreSnapshot?.bytes?.toString('utf8').split('\n') ?? [],
     )
     const missingIgnoreLines = PRETTIER_IGNORE_LINES.filter(
       (line) => !ignoreLines.has(line),

@@ -1,9 +1,10 @@
-import { chmod, readFile, writeFile } from 'node:fs/promises'
+import { chmod, readFile, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
 import { FileSystem } from '../../src/core/filesystem.js'
+import { scriptIntent } from '../../src/core/intents.js'
 import { buildPlan } from '../../src/core/plan-builder.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import { qualityModule } from '../../src/modules/quality.js'
@@ -199,6 +200,36 @@ describe('quality module', () => {
   )
 
   it.each([
+    ['src/eslint.config.js', 'ESLint'],
+    ['src/.prettierrc', 'Prettier'],
+    ['src/.editorconfig', 'EditorConfig'],
+  ])('rejects nested configuration at %s', async (path, tool) => {
+    const project = await createProject()
+    await writeFile(join(project.root, path), 'export default {}\n')
+    const context = await detectProject(project.root)
+
+    await expect(qualityModule.analyze(context)).rejects.toThrow(
+      `${tool} configuration conflicts at ${path}.`,
+    )
+  })
+
+  it.each([
+    ['eslintConfig', 'ESLint'],
+    ['prettier', 'Prettier'],
+  ])('rejects nested package.json#%s configuration', async (key, tool) => {
+    const project = await createProject()
+    await writeFile(
+      join(project.root, 'src/package.json'),
+      `${JSON.stringify({ [key]: {} }, null, 2)}\n`,
+    )
+    const context = await detectProject(project.root)
+
+    await expect(qualityModule.analyze(context)).rejects.toThrow(
+      `${tool} configuration conflicts at src/package.json#${key}.`,
+    )
+  })
+
+  it.each([
     ['eslintConfig', 'ESLint'],
     ['prettier', 'Prettier'],
   ])(
@@ -358,6 +389,123 @@ describe('quality module', () => {
         {
           message: 'Prettier base configuration is missing or changed.',
           path: 'prettier.config.mjs',
+        },
+      ]),
+    )
+  })
+
+  it('accepts a frontprep check pipeline extended once by a later module', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const analysis = await qualityModule.analyze(context)
+    const qualityIntents = await qualityModule.plan(context, analysis)
+    const plan = await buildPlan(context, [
+      ...qualityIntents,
+      scriptIntent(
+        'test',
+        'frontprep:check',
+        'pnpm run frontprep:test',
+        'append-once',
+        'Test extends the full check pipeline.',
+      ),
+    ])
+    await applyOperations(project.root, plan.operations)
+
+    const updatedContext = await detectProject(project.root)
+    const result = await qualityModule.verify(updatedContext)
+
+    expect(updatedContext.packageJson.scripts?.['frontprep:check']).toBe(
+      'pnpm run frontprep:quality && pnpm run frontprep:test',
+    )
+    expect(result).toEqual({ issues: [], valid: true })
+  })
+
+  it('rejects a frontprep check pipeline with a duplicated Quality stage', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const analysis = await qualityModule.analyze(context)
+    const plan = await buildPlan(
+      context,
+      await qualityModule.plan(context, analysis),
+    )
+    await applyOperations(project.root, plan.operations)
+    const packagePath = join(project.root, 'package.json')
+    const packageJson = JSON.parse(await readFile(packagePath, 'utf8')) as {
+      scripts: Record<string, string>
+    }
+    packageJson.scripts['frontprep:check'] =
+      'pnpm run frontprep:quality && pnpm run frontprep:test && pnpm run frontprep:quality'
+    await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`)
+
+    const changedContext = await detectProject(project.root)
+    const result = await qualityModule.verify(changedContext)
+
+    expect(result.issues).toContainEqual({
+      message: 'Frontprep-owned script frontprep:check is missing or changed.',
+      path: 'package.json',
+    })
+  })
+
+  it('aggregates alternate configuration added after Quality setup', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const analysis = await qualityModule.analyze(context)
+    const plan = await buildPlan(
+      context,
+      await qualityModule.plan(context, analysis),
+    )
+    await applyOperations(project.root, plan.operations)
+    await writeFile(
+      join(project.root, 'eslint.config.js'),
+      'export default []\n',
+    )
+    await writeFile(join(project.root, 'src/.prettierrc'), '{}\n')
+    const packagePath = join(project.root, 'package.json')
+    const packageJson = JSON.parse(
+      await readFile(packagePath, 'utf8'),
+    ) as Record<string, unknown>
+    packageJson.prettier = {}
+    await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`)
+
+    const changedContext = await detectProject(project.root)
+    const result = await qualityModule.verify(changedContext)
+
+    expect(result.valid).toBe(false)
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        {
+          message: 'ESLint configuration conflicts at eslint.config.js.',
+          path: 'eslint.config.js',
+        },
+        {
+          message: 'Prettier configuration conflicts at package.json#prettier.',
+          path: 'package.json',
+        },
+        {
+          message: 'Prettier configuration conflicts at src/.prettierrc.',
+          path: 'src/.prettierrc',
+        },
+      ]),
+    )
+  })
+
+  it('continues verification when a configuration path is not a regular file', async () => {
+    const project = await createProject()
+    await symlink('src/app/layout.tsx', join(project.root, 'eslint.config.mjs'))
+    const context = await detectProject(project.root)
+
+    const result = await qualityModule.verify(context)
+
+    expect(result.valid).toBe(false)
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        {
+          message: 'ESLint configuration conflicts at eslint.config.mjs.',
+          path: 'eslint.config.mjs',
+        },
+        {
+          message: 'Dependency eslint must satisfy ^10.0.0.',
+          path: 'package.json',
         },
       ]),
     )
