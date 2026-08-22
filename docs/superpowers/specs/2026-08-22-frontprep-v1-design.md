@@ -289,24 +289,29 @@ Frontprep owns these scripts:
 ```json
 {
   "frontprep:lint": "eslint .",
+  "frontprep:lint:fix": "eslint . --fix",
+  "frontprep:format": "prettier --write .",
   "frontprep:format:check": "prettier --check .",
   "frontprep:typecheck": "tsc --noEmit",
+  "frontprep:quality": "pnpm run frontprep:lint && pnpm run frontprep:format:check && pnpm run frontprep:typecheck",
   "frontprep:test": "vitest run",
   "frontprep:build": "next build",
-  "frontprep:check": "pnpm run frontprep:lint && pnpm run frontprep:format:check && pnpm run frontprep:typecheck && pnpm run frontprep:test && pnpm run frontprep:build",
+  "frontprep:check": "pnpm run frontprep:quality && pnpm run frontprep:test && pnpm run frontprep:build",
   "frontprep:prepare": "husky"
 }
 ```
 
-On a clean project, conventional aliases are also added:
+On a clean project, conventional pnpm aliases are also added. Existing
+user-owned aliases are preserved:
 
 ```json
 {
-  "lint": "eslint .",
-  "lint:fix": "eslint . --fix",
-  "format": "prettier --write .",
-  "format:check": "prettier --check .",
-  "typecheck": "tsc --noEmit",
+  "lint": "pnpm run frontprep:lint",
+  "lint:fix": "pnpm run frontprep:lint:fix",
+  "format": "pnpm run frontprep:format",
+  "format:check": "pnpm run frontprep:format:check",
+  "typecheck": "pnpm run frontprep:typecheck",
+  "quality": "pnpm run frontprep:quality",
   "test": "vitest",
   "test:run": "vitest run",
   "check": "pnpm run frontprep:check",
