@@ -12,6 +12,7 @@ interface PackageJson {
   engines: { node: string }
   files: string[]
   name: string
+  scripts: Record<string, string>
 }
 
 interface PackedFile {
@@ -39,6 +40,9 @@ describe('package metadata', () => {
     expect(packageJson.bin).toEqual({ frontprep: 'dist/cli.js' })
     expect(packageJson.engines.node).toBe('>=20.9.0')
     expect(packageJson.files).toEqual(['dist', 'schema'])
+    expect(packageJson.scripts['verify:test-compatibility']).toBe(
+      'vitest run --config tests/acceptance/vitest.config.ts',
+    )
   })
 
   it('packs only the executable, sourcemap, schema, and required metadata', async () => {
