@@ -33,7 +33,7 @@
 - Consumes: `ProjectContext`, `ChangeIntent`, `FileSystem`, `ConflictError`, and `SetupModule` from the existing core.
 - Produces: `testModule: SetupModule<TestAnalysis>` with `TestAnalysis = { readonly setupDirectory: string; readonly setupPath: string }`.
 
-- [ ] **Step 1: Write the failing plan and path-selection tests**
+- [x] **Step 1: Write the failing plan and path-selection tests**
 
 Add tests that call `detectProject`, `testModule.analyze`, and
 `testModule.plan`, then assert literal intent projections:
@@ -75,13 +75,13 @@ Add independent cases for root `app`, reuse of `test` and `tests`, multiple
 candidate directories, non-directory candidates, and symbolic links in any
 path component.
 
-- [ ] **Step 2: Run the focused test and confirm the missing-module failure**
+- [x] **Step 2: Run the focused test and confirm the missing-module failure**
 
 Run: `pnpm test:run tests/modules/test.test.ts`
 
 Expected: FAIL because `src/modules/test.ts` does not exist.
 
-- [ ] **Step 3: Implement minimal deterministic analysis and intents**
+- [x] **Step 3: Implement minimal deterministic analysis and intents**
 
 Create constants for the dependency table, scripts, canonical setup bytes,
 alternate Vitest/Jest paths, and Jest dependency names. Implement candidate
@@ -109,7 +109,7 @@ export default defineConfig({
 Emit eight dependency intents, the two managed files, and the four script
 intents described by `docs/modules/test.md`.
 
-- [ ] **Step 4: Run focused tests and refactor while green**
+- [x] **Step 4: Run focused tests and refactor while green**
 
 Run: `pnpm test:run tests/modules/test.test.ts`
 
@@ -132,7 +132,7 @@ consumer inspection non-executing.
 - Consumes: `TestAnalysis` and canonical renderers from Task 1.
 - Produces: preflight conflict detection used by `testModule.analyze` and reusable issue collection for `verify`.
 
-- [ ] **Step 1: Write failing conflict tests**
+- [x] **Step 1: Write failing conflict tests**
 
 Add table-driven tests for alternate `vitest.config.*`,
 `vitest.workspace.*`, `jest.config.*`, `package.json#jest`, and each direct
@@ -140,14 +140,14 @@ Jest tool. Add cases proving that a root `vite.config.ts` is allowed, exact
 canonical managed files are accepted, differing unowned files are rejected,
 and manifest-owned unchanged files remain eligible for rewrite.
 
-- [ ] **Step 2: Run the focused test and confirm conflicts are not detected**
+- [x] **Step 2: Run the focused test and confirm conflicts are not detected**
 
 Run: `pnpm test:run tests/modules/test.test.ts`
 
 Expected: FAIL on the first alternate or Jest configuration case because
 analysis currently accepts it.
 
-- [ ] **Step 3: Implement non-executing conflict collection**
+- [x] **Step 3: Implement non-executing conflict collection**
 
 Inspect root entries and package data without importing configuration. For a
 canonical file, accept exact expected bytes or a manifest-owned file whose
@@ -161,7 +161,7 @@ throw new ConflictError(first.message, first.path, 'test')
 Keep root Vite configuration out of the conflict set because the dedicated
 Vitest config overrides it.
 
-- [ ] **Step 4: Run focused tests and the core plan-builder tests**
+- [x] **Step 4: Run focused tests and the core plan-builder tests**
 
 Run: `pnpm test:run tests/modules/test.test.ts tests/core/plan-builder.test.ts`
 
@@ -181,7 +181,7 @@ Expected: all selected tests PASS.
 - Consumes: `testModule.verify(context)` from the `SetupModule` contract and Quality's existing first-stage pipeline rule.
 - Produces: an aggregated `VerificationResult` for dependencies, scripts, paths, managed bytes, modes, and post-install conflicts.
 
-- [ ] **Step 1: Write failing apply-and-verify tests**
+- [x] **Step 1: Write failing apply-and-verify tests**
 
 Build one plan from Quality and Test intents, apply its operations through the
 real `FileSystem`, refresh project detection, and assert:
@@ -200,14 +200,14 @@ Add failing cases for missing or incompatible dependencies, changed modes and
 bytes, missing aliases, reordered or duplicate check stages, a valid later
 build stage, and multiple simultaneous post-install conflicts.
 
-- [ ] **Step 2: Run the focused test and confirm verification is incomplete**
+- [x] **Step 2: Run the focused test and confirm verification is incomplete**
 
 Run: `pnpm test:run tests/modules/test.test.ts`
 
 Expected: FAIL because `verify` does not yet validate the complete installed
 contract.
 
-- [ ] **Step 3: Implement aggregated verification**
+- [x] **Step 3: Implement aggregated verification**
 
 Collect configuration issues first, then validate each dependency using
 `validRange` and `intersects`. Split `frontprep:check` on the literal
@@ -225,7 +225,7 @@ issue and use the default candidate so remaining file checks still execute.
 Use `FileSystem.snapshot` wrappers so unreadable and non-regular paths produce
 issues rather than aborting verification.
 
-- [ ] **Step 4: Run focused tests and all module tests**
+- [x] **Step 4: Run focused tests and all module tests**
 
 Run: `pnpm test:run tests/modules`
 
@@ -244,7 +244,7 @@ Expected: all Quality, Tailwind, registry, and Test module tests PASS.
 - Consumes: `runInit`, `createCommandServices`, `applyPlan`, `qualityModule`, `testModule`, and passive modules for unfinished v1 stages.
 - Produces: integration evidence that the Test plan is transactional and manifest-backed idempotent.
 
-- [ ] **Step 1: Write the transaction integration tests**
+- [x] **Step 1: Write the transaction integration tests**
 
 Create command services with modules in fixed order:
 
@@ -264,20 +264,20 @@ second change set, preserved custom `test`, canonical config/setup files, and a
 manifest that records both managed paths. The failure case injects a project
 check error and asserts package/config/setup/manifest restoration.
 
-- [ ] **Step 2: Run the focused test and confirm the new integration case fails**
+- [x] **Step 2: Run the focused test and confirm the new integration case fails**
 
 Run: `pnpm test:run tests/modules/test.test.ts`
 
 Expected: FAIL if any ownership, managed-script, rollback, or idempotency
 contract is not implemented correctly.
 
-- [ ] **Step 3: Make only test-driven corrections required by integration**
+- [x] **Step 3: Make only test-driven corrections required by integration**
 
 Correct production logic only when the integration failure exposes a real
 contract gap. Do not register Test globally and do not weaken transaction or
 manifest checks.
 
-- [ ] **Step 4: Run focused and full verification**
+- [x] **Step 4: Run focused and full verification**
 
 Run: `pnpm test:run tests/modules/test.test.ts`
 
@@ -288,7 +288,7 @@ Run: `pnpm check`
 Expected: formatting, linting, type checking, build, and every repository test
 PASS with no warnings or errors.
 
-- [ ] **Step 5: Commit implementation and tests**
+- [x] **Step 5: Commit implementation and tests**
 
 ```bash
 git add src/modules/test.ts tests/modules/test.test.ts
@@ -308,20 +308,31 @@ git commit -m "feat: implement test module"
 - Consumes: the design commit, implementation commit, and full git diff from `origin/develop`.
 - Produces: a reviewed draft PR that becomes ready and merges into `develop` only after fresh full verification.
 
-- [ ] **Step 1: Run plan self-review**
+- [x] **Step 1: Run plan self-review**
 
 Re-read `docs/modules/test.md` and map every dependency, file, path,
 conflict, intent, verification, and test-matrix requirement to a passing test.
 Search this plan for placeholder language and verify all type and function names
 match the implementation.
 
-- [ ] **Step 2: Request independent code review**
+- [ ] **Step 2: Run fresh pre-PR verification**
+
+Run `pnpm check` and `git diff --check origin/develop...HEAD`. Do not push a
+tree that has not passed both commands after the implementation commit.
+
+- [ ] **Step 3: Push and open the draft PR**
+
+Push `feat/test-module` and create a draft PR targeting `develop`. Include the
+design and implementation commits, dependency compatibility rationale, test
+counts, transaction coverage, and the external no-tests/React smoke evidence.
+
+- [ ] **Step 4: Request independent code review**
 
 Dispatch a read-only reviewer with base `origin/develop`, branch HEAD, this
 plan, and `docs/modules/test.md`. Correct every Critical or Important finding
 through a new failing test before production changes.
 
-- [ ] **Step 3: Run fresh completion verification**
+- [ ] **Step 5: Resolve review findings and run completion verification**
 
 Run: `pnpm check`
 
@@ -331,8 +342,8 @@ Run: `git diff --check origin/develop...HEAD && git status --short`
 
 Expected: no whitespace errors and no uncommitted implementation files.
 
-- [ ] **Step 4: Push, open draft PR, and integrate through the agreed workflow**
+- [ ] **Step 6: Mark ready and integrate through the agreed workflow**
 
-Push `feat/test-module`, create a draft PR targeting `develop`, report review
-and verification evidence, mark it ready, and merge it only after required
-checks and approvals pass. Keep the Test worktree until the PR is merged.
+Report review and verification evidence, mark the draft PR ready, and merge it
+only after required checks and approvals pass. Keep the Test worktree until the
+PR is merged.
