@@ -270,7 +270,7 @@ Tailwind owns the Tailwind CSS v4 PostCSS integration, the single `@import "tail
 
 ### Test
 
-Test owns `vitest.config.ts`, a setup file under the detected source root, jsdom, React Testing Library, jest-dom matchers, TypeScript path resolution, and watch/run scripts. A project with no test files remains valid through Vitest's `passWithNoTests` setting.
+Test owns `vitest.config.mts`, a setup file under the detected source root, jsdom, React Testing Library, jest-dom matchers, TypeScript path resolution, and watch/run scripts. A project with no test files remains valid through Vitest's `passWithNoTests` setting.
 
 ### Git Hooks
 
