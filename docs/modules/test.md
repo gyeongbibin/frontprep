@@ -33,7 +33,10 @@ Vite 6 requirement prevents Vitest's broad Vite dependency range from
 selecting Vite 7 or 8, whose current Node.js floor is higher. React plugin 4,
 jsdom 26, and jest-dom below 6.10 likewise avoid raising the consumer runtime
 floor. The ranges are based on current package engine and peer metadata and
-are tested as one compatibility set.
+are tested as one compatibility set by `pnpm verify:test-compatibility`. That
+acceptance check applies the real module plan to a temporary `src/app` project,
+runs a real pnpm install under Node.js 20.9.0, and executes the generated
+Vitest config with a React Testing Library render and jest-dom assertion.
 
 An existing declaration may remain in either `dependencies` or
 `devDependencies` when its valid semver range intersects the requested range.
@@ -203,6 +206,11 @@ The full transaction runs `pnpm run frontprep:check`; `passWithNoTests: true`
 therefore makes a newly configured project with no test files valid while
 preserving a failing exit for real test failures.
 
+Repository acceptance verification is intentionally separate from the fast
+unit suite because it downloads the declared consumer dependency graph. Run
+`pnpm verify:test-compatibility` to resolve that graph with pnpm 10 and execute
+it using the exact supported Node.js floor, `v20.9.0`.
+
 ## Test Matrix
 
 Module tests cover:
@@ -211,6 +219,8 @@ Module tests cover:
 - default paths for both `src/app` and root `app` projects;
 - reuse of existing `test` and `tests` directories;
 - rejection of ambiguous, symbolic-link, and non-directory test paths;
+- rejection when the detected `src` source-directory component is itself a
+  symbolic link;
 - exact canonical projects and manifest-backed idempotent replanning;
 - conflicting managed files, alternate Vitest configurations, Vitest
   workspaces, Jest files, package configuration, and direct Jest tools;
@@ -225,4 +235,7 @@ Module tests cover:
 - successful and rollback-producing `runInit` transactions with an injected
   five-module registry and package-manager service;
 - composition with Quality through the core plan builder without registering
-  Test by default.
+  Test by default;
+- a separate real-install acceptance fixture that runs generated alias
+  resolution, React rendering, cleanup setup, and jest-dom matchers on Node.js
+  20.9.0.

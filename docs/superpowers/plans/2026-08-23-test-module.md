@@ -315,24 +315,29 @@ conflict, intent, verification, and test-matrix requirement to a passing test.
 Search this plan for placeholder language and verify all type and function names
 match the implementation.
 
-- [ ] **Step 2: Run fresh pre-PR verification**
+- [x] **Step 2: Run fresh pre-PR verification**
 
 Run `pnpm check` and `git diff --check origin/develop...HEAD`. Do not push a
 tree that has not passed both commands after the implementation commit.
 
-- [ ] **Step 3: Push and open the draft PR**
+- [x] **Step 3: Push and open the draft PR**
 
 Push `feat/test-module` and create a draft PR targeting `develop`. Include the
 design and implementation commits, dependency compatibility rationale, test
 counts, transaction coverage, and the external no-tests/React smoke evidence.
 
-- [ ] **Step 4: Request independent code review**
+- [x] **Step 4: Request independent code review**
 
 Dispatch a read-only reviewer with base `origin/develop`, branch HEAD, this
 plan, and `docs/modules/test.md`. Correct every Critical or Important finding
 through a new failing test before production changes.
 
-- [ ] **Step 5: Resolve review findings and run completion verification**
+The review requested an automated real-install compatibility check at the
+Node.js 20.9 floor and explicit coverage for a symbolic-link `src` component.
+The follow-up adds `pnpm verify:test-compatibility`, a separately configured
+acceptance fixture, and the missing path-component regression case.
+
+- [x] **Step 5: Resolve review findings and run completion verification**
 
 Run: `pnpm check`
 
@@ -341,6 +346,10 @@ Expected: exit code `0`, all repository checks PASS.
 Run: `git diff --check origin/develop...HEAD && git status --short`
 
 Expected: no whitespace errors and no uncommitted implementation files.
+
+Observed after the review fixes: `pnpm check` passed 23 files and 234 tests;
+`pnpm verify:test-compatibility` passed its real-install Node.js 20.9.0
+fixture; both diff checks completed without errors.
 
 - [ ] **Step 6: Mark ready and integrate through the agreed workflow**
 

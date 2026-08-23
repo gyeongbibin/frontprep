@@ -3,6 +3,7 @@ import {
   chmod,
   mkdir,
   readFile,
+  rename,
   symlink,
   writeFile,
 } from 'node:fs/promises'
@@ -330,6 +331,17 @@ afterEach(() => {
 
     await expect(testModule.analyze(context)).rejects.toThrow(
       'Test path contains a symbolic link: src/test.',
+    )
+  })
+
+  it('rejects a symbolic-link source directory before selecting a test path', async () => {
+    const project = await createProject()
+    await rename(join(project.root, 'src'), join(project.root, 'source'))
+    await symlink('source', join(project.root, 'src'), 'dir')
+    const context = await detectProject(project.root)
+
+    await expect(testModule.analyze(context)).rejects.toThrow(
+      'Test path contains a symbolic link: src.',
     )
   })
 

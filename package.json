@@ -20,7 +20,8 @@
     "test": "vitest",
     "test:run": "vitest run",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test:run",
-    "verify:package": "pnpm build && node scripts/verify-package.mjs"
+    "verify:package": "pnpm build && node scripts/verify-package.mjs",
+    "verify:test-compatibility": "vitest run --config tests/acceptance/vitest.config.ts"
   },
   "engines": {
     "node": ">=20.9.0"
