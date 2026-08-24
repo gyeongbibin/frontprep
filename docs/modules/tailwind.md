@@ -88,7 +88,7 @@ Tailwind patches the stylesheet reported by the core adapter with exactly one
 canonical first-line import:
 
 ```text
-@import "tailwindcss";
+@import 'tailwindcss';
 ```
 
 Existing CSS after the import is preserved, including `@theme`, `@source`,

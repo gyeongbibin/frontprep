@@ -8,6 +8,7 @@ import {
 } from 'node:fs/promises'
 import { join } from 'node:path'
 
+import { format } from 'prettier'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -420,11 +421,11 @@ describe('tailwind module', () => {
 
   it.each([
     [
-      '@import "tailwindcss";\n@import "tailwindcss";\nbody {}\n',
+      "@import 'tailwindcss';\n@import 'tailwindcss';\nbody {}\n",
       'Tailwind stylesheet import is duplicated.',
     ],
     [
-      "@import 'tailwindcss';\nbody {}\n",
+      '@import "tailwindcss";\nbody {}\n',
       'Tailwind stylesheet import is not canonical.',
     ],
     [
@@ -448,7 +449,7 @@ describe('tailwind module', () => {
       'Legacy Tailwind directives are not supported.',
     ],
     [
-      'body {}\n@import "tailwindcss";\n',
+      "body {}\n@import 'tailwindcss';\n",
       'Tailwind stylesheet import must be the first line.',
     ],
   ])('rejects an incompatible stylesheet', async (contents, message) => {
@@ -520,10 +521,12 @@ export { cn } from './cn'
     const updatedContext = await detectProject(project.root)
     const verification = await tailwindModule.verify(updatedContext)
     expect(verification).toEqual({ issues: [], valid: true })
-    expect(
-      await readFile(join(project.root, 'src/app/globals.css'), 'utf8'),
-    ).toBe(
-      '@import "tailwindcss";\n\n@theme { --color-brand: red; }\nbody {}\n',
+    const stylesheet = await readFile(
+      join(project.root, 'src/app/globals.css'),
+      'utf8',
+    )
+    expect(stylesheet).toBe(
+      "@import 'tailwindcss';\n\n@theme { --color-brand: red; }\nbody {}\n",
     )
     expect(
       await readFile(join(project.root, 'prettier.config.mjs'), 'utf8'),
@@ -535,6 +538,27 @@ export { cn } from './cn'
       ...(await tailwindModule.plan(updatedContext, secondAnalysis)),
     ])
     expect(secondPlan.operations).toEqual([])
+  })
+
+  it('generates an import stable under the shared Prettier quote policy', async () => {
+    const project = await createProject()
+    await writeFile(join(project.root, 'src/app/globals.css'), 'body {\n}\n')
+    const context = await detectProject(project.root)
+    const qualityAnalysis = await qualityModule.analyze(context)
+    const tailwindAnalysis = await tailwindModule.analyze(context)
+    const plan = await buildPlan(context, [
+      ...(await qualityModule.plan(context, qualityAnalysis)),
+      ...(await tailwindModule.plan(context, tailwindAnalysis)),
+    ])
+    await applyOperations(project.root, plan.operations)
+    const stylesheet = await readFile(
+      join(project.root, 'src/app/globals.css'),
+      'utf8',
+    )
+
+    expect(await format(stylesheet, { parser: 'css', singleQuote: true })).toBe(
+      stylesheet,
+    )
   })
 
   it('completes a real init transaction with an injected module registry', async () => {
@@ -604,7 +628,7 @@ export { cn } from './cn'
     const project = await createProject()
     await writeFile(
       join(project.root, 'src/app/globals.css'),
-      '@import "tailwindcss";\r\nbody {}\r\n',
+      "@import 'tailwindcss';\r\nbody {}\r\n",
     )
     const context = await detectProject(project.root)
     const qualityAnalysis = await qualityModule.analyze(context)
@@ -639,7 +663,7 @@ export { cn } from './cn'
       await applyOperations(project.root, plan.operations)
       await writeFile(
         join(project.root, 'src/app/globals.css'),
-        `@import "tailwindcss";\n${invalidImport}\nbody {}\n`,
+        `@import 'tailwindcss';\n${invalidImport}\nbody {}\n`,
       )
 
       const updatedContext = await detectProject(project.root)
