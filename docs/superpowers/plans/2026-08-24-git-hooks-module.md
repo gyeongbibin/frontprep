@@ -252,7 +252,7 @@ git commit -m "feat: implement git hooks module"
 - Consumes: Quality and Git Hooks module plans plus `GitHooksManager`.
 - Produces `pnpm verify:git-hooks-compatibility` and an exact Node.js 22.22.1 real-install/real-commit fixture.
 
-- [ ] **Step 1: Write failing composition and package-script tests**
+- [x] **Step 1: Write failing composition and package-script tests**
 
 In `tests/modules/git-hooks.test.ts`, build Quality, Tailwind, Test, and Git Hooks plans together and assert deterministic script/dependency/file composition without default registration. In `tests/package.test.ts`, assert:
 
@@ -265,33 +265,33 @@ expect(packageJson.scripts['verify:git-hooks-compatibility']).toBe(
 )
 ```
 
-- [ ] **Step 2: Run focused tests and confirm the script contract fails**
+- [x] **Step 2: Run focused tests and confirm the script contract fails**
 
 Run: `pnpm exec vitest run tests/package.test.ts tests/modules/git-hooks.test.ts`
 
 Expected: FAIL because the package scripts and composition coverage are missing.
 
-- [ ] **Step 3: Add the focused package scripts**
+- [x] **Step 3: Add the focused package scripts**
 
 Keep both networked fixtures outside `pnpm check`; each command selects one acceptance file explicitly so Test verification does not run Git Hooks and vice versa.
 
-- [ ] **Step 4: Implement the exact-floor acceptance fixture**
+- [x] **Step 4: Implement the exact-floor acceptance fixture**
 
 Resolve the official `node@22.22.1` npm binary, prepend its directory to `PATH`, apply real Quality and Git Hooks plans to a temporary project, install with pnpm 10 and `--ignore-scripts`, and call `GitHooksManager.activate`. Create and stage a deliberately unformatted TypeScript file. Under an offline/invalid-registry environment, prove a valid `git commit -m "feat: verify hooks"` succeeds and rewrites the file canonically; then prove `git commit -m "invalid message"` fails without advancing `HEAD`. Assert `core.hooksPath` is `.husky/_`.
 
-- [ ] **Step 5: Run real compatibility acceptance**
+- [x] **Step 5: Run real compatibility acceptance**
 
 Run: `pnpm verify:git-hooks-compatibility`
 
 Expected: one fixture PASS under exactly `v22.22.1`, with real Husky, lint-staged, ESLint, Prettier, and commitlint execution.
 
-- [ ] **Step 6: Run Test acceptance independently**
+- [x] **Step 6: Run Test acceptance independently**
 
 Run: `pnpm verify:test-compatibility`
 
 Expected: only the Test fixture runs and PASSes.
 
-- [ ] **Step 7: Commit acceptance coverage**
+- [x] **Step 7: Commit acceptance coverage**
 
 ```bash
 git add package.json tests/acceptance tests/package.test.ts tests/modules/git-hooks.test.ts docs/modules/git-hooks.md

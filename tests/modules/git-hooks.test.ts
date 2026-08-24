@@ -1,10 +1,4 @@
-import {
-  chmod,
-  mkdir,
-  readFile,
-  symlink,
-  writeFile,
-} from 'node:fs/promises'
+import { chmod, mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -14,6 +8,10 @@ import { buildPlan } from '../../src/core/plan-builder.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import type { PackageJson, ProjectContext } from '../../src/core/types.js'
 import { gitHooksModule } from '../../src/modules/git-hooks.js'
+import { createModuleRegistry } from '../../src/modules/registry.js'
+import { qualityModule } from '../../src/modules/quality.js'
+import { tailwindModule } from '../../src/modules/tailwind.js'
+import { testModule } from '../../src/modules/test.js'
 import { createProject } from '../helpers/project.js'
 
 const EXPECTED_DEPENDENCIES = {
@@ -419,5 +417,49 @@ describe('git hooks module verification', () => {
     )
     expect(messages).toContain('Git core.hooksPath must be .husky/_.')
     expect(messages).toContain('Husky dispatcher is missing or unsafe.')
+  })
+})
+
+describe('git hooks module composition', () => {
+  it('composes after Quality, Tailwind, and Test without default registration', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const modules = [
+      qualityModule,
+      tailwindModule,
+      testModule,
+      gitHooksModule,
+    ] as const
+    const intents = []
+    for (const module of modules) {
+      const analysis = await module.analyze(context)
+      intents.push(...(await module.plan(context, analysis as never)))
+    }
+
+    const plan = await buildPlan(context, intents)
+    const packageOperation = plan.operations.find(
+      ({ path }) => path === 'package.json',
+    )!
+    const packageJson = JSON.parse(
+      packageOperation.afterBytes.toString('utf8'),
+    ) as PackageJson
+
+    expect(createModuleRegistry()).toEqual([])
+    expect(plan.operations.map(({ path }) => path)).toEqual(
+      expect.arrayContaining([
+        '.husky/commit-msg',
+        '.husky/pre-commit',
+        'commitlint.config.mjs',
+        'lint-staged.config.mjs',
+        'vitest.config.mts',
+      ]),
+    )
+    expect(packageJson.scripts).toMatchObject({
+      'frontprep:check':
+        'pnpm run frontprep:quality && pnpm run frontprep:test',
+      'frontprep:prepare': 'husky',
+      prepare: 'pnpm run frontprep:prepare',
+    })
+    expect(packageJson.devDependencies).toMatchObject(EXPECTED_DEPENDENCIES)
   })
 })
