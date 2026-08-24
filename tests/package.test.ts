@@ -4,6 +4,8 @@ import { promisify } from 'node:util'
 
 import { beforeAll, describe, expect, it } from 'vitest'
 
+import tsupConfig from '../tsup.config.js'
+
 const execFileAsync = promisify(execFile)
 const root = new URL('..', import.meta.url)
 
@@ -78,6 +80,10 @@ describe('package metadata', () => {
     expect(contents.startsWith('#!/usr/bin/env node\n')).toBe(true)
     expect(contents.match(/^#!\/usr\/bin\/env node$/gmu)).toHaveLength(1)
     expect(mode).toBe(0o755)
+  })
+
+  it('targets the supported Node.js major', () => {
+    expect(tsupConfig).toMatchObject({ target: 'node22' })
   })
 
   it('passes the packaged CLI smoke verification', async () => {
