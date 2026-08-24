@@ -24,16 +24,24 @@ frontprep --help
 frontprep --version
 ```
 
+For an explicit project root:
+
+```text
+frontprep init --cwd <project>
+frontprep check --cwd <project>
+pnpm run frontprep:check
+```
+
 `init` requires a clean Git worktree on first use. It analyzes all registered
 modules, builds one aggregate plan, applies it transactionally, runs one pnpm
 installation when dependencies change, verifies the project, and writes
 `.frontprep.json` last. `check` is read-only and validates the recorded setup
 before running the generated project check command.
 
-The `init/cli-core` branch contains the reusable engine and intentionally has
-no feature modules registered yet. Quality, Tailwind, test, Git-hooks, and CI
-modules are delivered through separate design-first pull requests based on the
-latest `develop` branch.
+The production CLI registers the complete v1 module set in fixed order:
+Quality, Tailwind, Test, Git Hooks, and CI. Together they generate deterministic
+quality scripts, Tailwind foundations, Vitest, local commit hooks, the Next.js
+production build, and a least-privilege GitHub Actions workflow.
 
 ## Development
 
@@ -41,8 +49,13 @@ latest `develop` branch.
 pnpm install --frozen-lockfile
 pnpm check
 pnpm verify:package
+pnpm verify:quality-compatibility
+pnpm verify:test-compatibility
+pnpm verify:git-hooks-compatibility
+pnpm verify:ci-compatibility
 ```
 
 `verify:package` creates the actual npm tarball, installs it into an isolated
-npm prefix, and smoke-tests the public `frontprep` bin. Consumer projects
-remain external acceptance targets.
+npm prefix, and smoke-tests the public `frontprep` bin. The compatibility
+commands exercise generated consumer projects; CI runs the full five-module
+public CLI under the exact minimum Node.js version.

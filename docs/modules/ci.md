@@ -225,5 +225,6 @@ installs from a generated lockfile, and proves that:
 
 GitHub-hosted runner execution itself is not emulated locally. The acceptance
 test validates every workflow field plus the exact commands the runner will
-execute; the merged repository's own GitHub Actions run remains the platform
-integration check.
+execute. Platform integration begins when a consumer commits the generated
+workflow; Frontprep does not install this consumer workflow into its own
+repository.
