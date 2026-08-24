@@ -255,13 +255,13 @@ git add README.md docs package.json pnpm-lock.yaml tsup.config.ts tests
 git commit -m "chore: require Node 22 runtime"
 ```
 
-- [ ] **Step 3: Push and open a draft PR**
+- [x] **Step 3: Push and open a draft PR**
 
 Push `chore/node22-baseline`, create a draft PR to `develop`, and include the
 Node 20 EOL evidence, dependency-engine rationale, exact test counts, and both
 acceptance results.
 
-- [ ] **Step 4: Request independent review**
+- [x] **Step 4: Request independent review**
 
 Review package metadata, build target, stale documentation, exact Node binary
 selection, and whether spawned packed/test processes inherit the intended
