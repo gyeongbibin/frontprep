@@ -40,7 +40,7 @@ describe('quality module', () => {
         .filter((intent) => intent.kind === 'dependency')
         .map(({ name, range, section }) => ({ name, range, section })),
     ).toEqual([
-      { name: 'eslint', range: '^10.0.0', section: 'devDependencies' },
+      { name: 'eslint', range: '^9.39.0', section: 'devDependencies' },
       {
         name: 'eslint-config-next',
         range: '^16.0.0',
@@ -277,7 +277,7 @@ describe('quality module', () => {
     expect(result.issues).toEqual(
       expect.arrayContaining([
         {
-          message: 'Dependency eslint must satisfy ^10.0.0.',
+          message: 'Dependency eslint must satisfy ^9.39.0.',
           path: 'package.json',
         },
         {
@@ -333,7 +333,7 @@ describe('quality module', () => {
     const updatedPackage = updatedContext.packageJson
     expect(verification).toEqual({ issues: [], valid: true })
     expect(updatedPackage.devDependencies).toMatchObject({
-      eslint: '^10.0.0',
+      eslint: '^9.39.0',
       'eslint-config-next': '^16.0.0',
       prettier: '^3.0.0',
     })
@@ -504,7 +504,7 @@ describe('quality module', () => {
           path: 'eslint.config.mjs',
         },
         {
-          message: 'Dependency eslint must satisfy ^10.0.0.',
+          message: 'Dependency eslint must satisfy ^9.39.0.',
           path: 'package.json',
         },
       ]),

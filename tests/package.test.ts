@@ -43,6 +43,8 @@ describe('package metadata', () => {
     expect(packageJson.bin).toEqual({ frontprep: 'dist/cli.js' })
     expect(packageJson.engines.node).toBe('>=22.22.1')
     expect(packageJson.devDependencies['@types/node']).toBe('^22.20.0')
+    expect(packageJson.devDependencies.eslint).toBe('^9.39.0')
+    expect(packageJson.devDependencies['@eslint/js']).toBe('^9.39.0')
     expect(packageJson.files).toEqual(['dist', 'schema'])
     expect(packageJson.scripts['verify:package']).toBe(
       'pnpm build && pnpm --silent dlx --package=node@22.22.1 node scripts/verify-package.mjs',

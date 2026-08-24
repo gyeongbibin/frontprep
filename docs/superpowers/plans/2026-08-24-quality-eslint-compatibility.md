@@ -36,7 +36,7 @@
 - Consumes: existing Quality dependency intent and package metadata tests.
 - Produces: generated `eslint@^9.39.0`, repository `eslint@^9.39.0`, and repository `@eslint/js@^9.39.0`.
 
-- [ ] **Step 1: Write failing dependency-contract tests**
+- [x] **Step 1: Write failing dependency-contract tests**
 
 Change every Quality expected range and verification message from
 `^10.0.0` to `^9.39.0`. Extend the package metadata test with:
@@ -46,7 +46,7 @@ expect(packageJson.devDependencies.eslint).toBe('^9.39.0')
 expect(packageJson.devDependencies['@eslint/js']).toBe('^9.39.0')
 ```
 
-- [ ] **Step 2: Run focused tests and confirm old ranges fail**
+- [x] **Step 2: Run focused tests and confirm old ranges fail**
 
 Run:
 
@@ -54,14 +54,14 @@ Run:
 
 Expected: FAIL on the generated `^10.0.0` range and repository ESLint 10 metadata.
 
-- [ ] **Step 3: Update module, repository metadata, lockfile, and design prose**
+- [x] **Step 3: Update module, repository metadata, lockfile, and design prose**
 
 Set the three ranges exactly as specified, run `pnpm install`, and update the
 Quality dependency table/rationale to record that Next.js 16's current React
 plugin supports ESLint through 9. Keep Node 22 and every generated config byte
 unchanged.
 
-- [ ] **Step 4: Run focused verification**
+- [x] **Step 4: Run focused verification**
 
 ```bash
 pnpm exec vitest run tests/modules/quality.test.ts tests/package.test.ts
@@ -71,7 +71,7 @@ pnpm typecheck
 
 Expected: all commands PASS with ESLint 9.39 resolved.
 
-- [ ] **Step 5: Commit the compatibility pin**
+- [x] **Step 5: Commit the compatibility pin**
 
 ```bash
 git add docs/modules/quality.md package.json pnpm-lock.yaml src/modules/quality.ts tests/modules/quality.test.ts tests/package.test.ts

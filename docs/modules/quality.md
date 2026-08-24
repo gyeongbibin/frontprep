@@ -19,9 +19,15 @@ Quality contributes these development dependencies:
 
 | Package              | Requested range | Purpose                                      |
 | -------------------- | --------------- | -------------------------------------------- |
-| `eslint`             | `^10.0.0`       | ESLint flat-config CLI                       |
+| `eslint`             | `^9.39.0`       | Next.js-compatible ESLint flat-config CLI    |
 | `eslint-config-next` | `^16.0.0`       | Next.js Core Web Vitals and TypeScript rules |
 | `prettier`           | `^3.0.0`        | Deterministic formatting and format checks   |
+
+ESLint 9.39 is the tested v1 compatibility line because the React plugin
+currently selected by `eslint-config-next` 16 declares ESLint support through
+major 9 and crashes while loading rules under ESLint 10. Frontprep keeps its
+Node.js 22.22.1 runtime floor and will restore ESLint 10 only after the full
+Next.js plugin graph supports it.
 
 An existing declaration may remain in either `dependencies` or
 `devDependencies` when its valid semver range intersects the requested range.
