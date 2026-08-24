@@ -212,9 +212,10 @@ Unit tests cover:
 - manifest recording for all five modules and the workflow;
 - transaction rollback when the project check fails.
 
-Acceptance verification creates a clean minimal Next.js 16 project, runs the
-built CLI under Node.js 22.22.1 with the production default registry,
-installs from a generated lockfile, and proves that:
+Acceptance verification first creates the real npm tarball and installs it
+into an isolated npm prefix. It then creates a clean minimal Next.js 16
+project, runs only that installed CLI under Node.js 22.22.1 with the production
+default registry, installs from a generated lockfile, and proves that:
 
 - all five modules apply through one public `frontprep init`;
 - `pnpm run frontprep:check` executes lint, formatting, type checking, Vitest,
@@ -226,5 +227,5 @@ installs from a generated lockfile, and proves that:
 GitHub-hosted runner execution itself is not emulated locally. The acceptance
 test validates every workflow field plus the exact commands the runner will
 execute. Platform integration begins when a consumer commits the generated
-workflow; Frontprep does not install this consumer workflow into its own
-repository.
+workflow. Frontprep's repository has a separate release-check workflow; it is
+not the consumer workflow owned by this module.
