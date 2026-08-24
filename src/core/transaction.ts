@@ -4,6 +4,11 @@ import { join } from 'node:path'
 
 import { FrontprepError } from './errors.js'
 import { FileSystem, type FileSnapshot } from './filesystem.js'
+import {
+  GitHooksManager,
+  type GitHooksActivation,
+  type GitHooksService,
+} from './git-hooks.js'
 import { assertSafeGitState } from './git-guard.js'
 import { MANIFEST_PATH, writeManifest } from './manifest.js'
 import { PnpmPackageManager } from './package-manager.js'
@@ -26,8 +31,10 @@ export interface PackageManagerService {
 }
 
 export interface TransactionServices {
+  activateGitHooks?: boolean
   assertGitState?: (context: ProjectContext) => Promise<void>
   frontprepVersion: string
+  gitHooks?: GitHooksService
   moduleVersions: Readonly<Record<ModuleId, string>>
   packageManager?: PackageManagerService
   signal?: AbortSignal
@@ -243,6 +250,8 @@ export async function applyPlan(
   const targets = uniqueTargets(plan)
   const backup = await createBackup(fileSystem, targets)
   const packageManager = services.packageManager ?? new PnpmPackageManager()
+  const gitHooks = services.gitHooks ?? new GitHooksManager()
+  let gitHooksActivation: GitHooksActivation | null = null
 
   try {
     for (const operation of plan.operations) {
@@ -257,6 +266,12 @@ export async function applyPlan(
     if (plan.dependenciesChanged) {
       await packageManager.assertSupported(context.root, services.signal)
       await packageManager.install(context.root, services.signal)
+    }
+    if (services.activateGitHooks === true) {
+      gitHooksActivation = await gitHooks.activate(
+        context.root,
+        services.signal,
+      )
     }
     services.signal?.throwIfAborted()
     await services.verify(context.root, services.signal)
@@ -297,11 +312,21 @@ export async function applyPlan(
       manifest: Object.freeze(manifest),
     })
   } catch (error) {
-    const failures = await restoreBackup(
-      fileSystem,
-      targets,
-      backup.entries,
-      createdDirectories,
+    const failures: unknown[] = []
+    if (gitHooksActivation !== null) {
+      try {
+        await gitHooks.restore(context.root, gitHooksActivation)
+      } catch (restoration) {
+        failures.push(restoration)
+      }
+    }
+    failures.push(
+      ...(await restoreBackup(
+        fileSystem,
+        targets,
+        backup.entries,
+        createdDirectories,
+      )),
     )
     if (failures.length > 0) throw rollbackFailure(error, failures)
     throw error

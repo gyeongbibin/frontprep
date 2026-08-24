@@ -4,6 +4,10 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { hashBytes } from '../../src/core/filesystem.js'
+import type {
+  GitHooksActivation,
+  GitHooksService,
+} from '../../src/core/git-hooks.js'
 import type { ChangePlan, FileOperation } from '../../src/core/plan.js'
 import { toProjectPath } from '../../src/core/paths.js'
 import { detectProject } from '../../src/core/project-detector.js'
@@ -74,6 +78,25 @@ class TestPackageManager implements PackageManagerService {
   }
 }
 
+class TestGitHooks implements GitHooksService {
+  readonly events: string[]
+  restores: GitHooksActivation[] = []
+
+  constructor(events: string[] = []) {
+    this.events = events
+  }
+
+  async activate(): Promise<GitHooksActivation> {
+    this.events.push('activate')
+    return { previousHooksPath: null }
+  }
+
+  async restore(_root: string, activation: GitHooksActivation): Promise<void> {
+    this.events.push('restore')
+    this.restores.push(activation)
+  }
+}
+
 function services(
   packageManager: PackageManagerService,
   verify: TransactionServices['verify'] = async () => undefined,
@@ -90,6 +113,91 @@ function services(
 }
 
 describe('applyPlan', () => {
+  it('activates Git Hooks after installation and before verification', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const events: string[] = []
+    const packageManager = new TestPackageManager(async () => {
+      events.push('install')
+    })
+    const gitHooks = new TestGitHooks(events)
+
+    await applyPlan(
+      context,
+      plan([operation('.husky/pre-commit', 'hook\n', null, 0o755)], true),
+      {
+        ...services(packageManager, async () => {
+          events.push('verify')
+        }),
+        activateGitHooks: true,
+        gitHooks,
+      },
+    )
+
+    expect(events).toEqual(['install', 'activate', 'verify'])
+    expect(gitHooks.restores).toEqual([])
+  })
+
+  it('restores Git Hooks when later verification fails', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const gitHooks = new TestGitHooks()
+
+    await expect(
+      applyPlan(
+        context,
+        plan([operation('.husky/pre-commit', 'hook\n', null, 0o755)]),
+        {
+          ...services(new TestPackageManager(), async () => {
+            throw new Error('project verification failed')
+          }),
+          activateGitHooks: true,
+          gitHooks,
+        },
+      ),
+    ).rejects.toThrow('project verification failed')
+
+    expect(gitHooks.events).toEqual(['activate', 'restore'])
+    expect(gitHooks.restores).toEqual([{ previousHooksPath: null }])
+  })
+
+  it('does not activate Git Hooks for other module transactions', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const gitHooks = new TestGitHooks()
+
+    await applyPlan(
+      context,
+      plan([operation('.editorconfig', 'root = true\n', null)]),
+      { ...services(new TestPackageManager()), gitHooks },
+    )
+
+    expect(gitHooks.events).toEqual([])
+  })
+
+  it('does not activate Git Hooks when dependency installation fails', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const gitHooks = new TestGitHooks()
+    const packageManager = new TestPackageManager(async () => {
+      throw new Error('installation failed')
+    })
+
+    await expect(
+      applyPlan(
+        context,
+        plan([operation('.husky/pre-commit', 'hook\n', null, 0o755)], true),
+        {
+          ...services(packageManager),
+          activateGitHooks: true,
+          gitHooks,
+        },
+      ),
+    ).rejects.toThrow('installation failed')
+
+    expect(gitHooks.events).toEqual([])
+  })
+
   it('does not install, verify, or write a manifest for an empty plan', async () => {
     const project = await createProject()
     const context = await detectProject(project.root)

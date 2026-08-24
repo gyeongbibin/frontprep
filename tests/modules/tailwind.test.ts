@@ -16,6 +16,7 @@ import {
   type CommandReporter,
 } from '../../src/commands/init.js'
 import { FileSystem } from '../../src/core/filesystem.js'
+import type { GitHooksService } from '../../src/core/git-hooks.js'
 import { buildPlan } from '../../src/core/plan-builder.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import {
@@ -49,6 +50,13 @@ class RecordingPackageManager implements PackageManagerService {
   async install(): Promise<void> {
     this.installs += 1
   }
+}
+
+const PASSIVE_GIT_HOOKS: GitHooksService = {
+  async activate() {
+    return null
+  },
+  async restore() {},
 }
 
 function passiveModule(id: ModuleId): SetupModule<null> {
@@ -87,6 +95,7 @@ function tailwindCommandServices(
         packageManager,
       }),
     assertSafeGitState: async () => undefined,
+    gitHooks: PASSIVE_GIT_HOOKS,
     runProjectCheck,
   } satisfies typeof base
 }

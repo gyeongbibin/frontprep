@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import { managedFileIntent } from '../../src/core/intents.js'
+import type {
+  GitHooksActivation,
+  GitHooksService,
+} from '../../src/core/git-hooks.js'
 import type { ChangePlan } from '../../src/core/plan.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import type { TransactionResult } from '../../src/core/transaction.js'
@@ -36,6 +40,19 @@ class RecordingReporter implements CommandReporter {
   }
   projectPassed(): void {
     this.events.push('project')
+  }
+}
+
+class RecordingGitHooks implements GitHooksService {
+  readonly events: string[] = []
+
+  async activate(): Promise<GitHooksActivation> {
+    this.events.push('activate')
+    return { previousHooksPath: null }
+  }
+
+  async restore(): Promise<void> {
+    this.events.push('restore')
   }
 }
 
@@ -109,6 +126,7 @@ describe('runInit', () => {
       },
       detectProject: async () => context,
       frontprepVersion: '0.1.0-beta.0',
+      gitHooks: new RecordingGitHooks(),
       modules,
       reporter,
       runProjectCheck: async () => {
@@ -169,6 +187,7 @@ describe('runInit', () => {
       ['quality', 'tailwind', 'test', 'git-hooks', 'ci'] as const
     ).map((id) => setupModule(id, calls))
     let applied = false
+    const gitHooks = new RecordingGitHooks()
     const services: CommandServices = {
       applyPlan: async () => {
         applied = true
@@ -178,6 +197,7 @@ describe('runInit', () => {
       buildPlan: async () => EMPTY_PLAN,
       detectProject: async () => context,
       frontprepVersion: '0.1.0-beta.0',
+      gitHooks,
       modules,
       reporter,
       runProjectCheck: async () => undefined,
@@ -188,11 +208,70 @@ describe('runInit', () => {
     const result = await runInit({ cwd: project.root }, services)
 
     expect(applied).toBe(false)
+    expect(gitHooks.events).toEqual(['activate'])
     expect(result.changed).toBe(false)
     expect(reporter.events.slice(-3)).toEqual([
       'already',
       'no-files',
       'project',
     ])
+  })
+
+  it('restores empty-plan Git Hooks activation when verification fails', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const calls: string[] = []
+    const gitHooks = new RecordingGitHooks()
+    const services: CommandServices = {
+      applyPlan: async () => {
+        throw new Error('must not apply')
+      },
+      assertSafeGitState: async () => undefined,
+      buildPlan: async () => EMPTY_PLAN,
+      detectProject: async () => context,
+      frontprepVersion: '0.1.0-beta.0',
+      gitHooks,
+      modules: [setupModule('git-hooks', calls)],
+      reporter: new RecordingReporter(),
+      runProjectCheck: async () => {
+        throw new Error('project check failed')
+      },
+      verifyModules: async () => ({ issues: [], valid: true }),
+      verifyStructure: async () => ({ issues: [], valid: true }),
+    }
+
+    await expect(runInit({ cwd: project.root }, services)).rejects.toThrow(
+      'project check failed',
+    )
+    expect(gitHooks.events).toEqual(['activate', 'restore'])
+  })
+
+  it('does not activate an empty Git Hooks plan after cancellation', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const calls: string[] = []
+    const gitHooks = new RecordingGitHooks()
+    const controller = new AbortController()
+    controller.abort()
+    const services: CommandServices = {
+      applyPlan: async () => {
+        throw new Error('must not apply')
+      },
+      assertSafeGitState: async () => undefined,
+      buildPlan: async () => EMPTY_PLAN,
+      detectProject: async () => context,
+      frontprepVersion: '0.1.0-beta.0',
+      gitHooks,
+      modules: [setupModule('git-hooks', calls)],
+      reporter: new RecordingReporter(),
+      runProjectCheck: async () => undefined,
+      verifyModules: async () => ({ issues: [], valid: true }),
+      verifyStructure: async () => ({ issues: [], valid: true }),
+    }
+
+    await expect(
+      runInit({ cwd: project.root, signal: controller.signal }, services),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(gitHooks.events).toEqual([])
   })
 })
