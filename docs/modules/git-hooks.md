@@ -25,16 +25,15 @@ Git Hooks contributes these development dependencies:
 | Package                           | Requested range | Purpose                            |
 | --------------------------------- | --------------- | ---------------------------------- |
 | `husky`                           | `^9.1.0`        | Git hook installation and dispatch |
-| `lint-staged`                     | `^15.5.0`       | Staged-file task selection         |
-| `@commitlint/cli`                 | `^20.0.0`       | Commit-message validation          |
-| `@commitlint/config-conventional` | `^20.0.0`       | Conventional Commits policy        |
+| `lint-staged`                     | `^17.3.0`       | Staged-file task selection         |
+| `@commitlint/cli`                 | `^21.2.0`       | Commit-message validation          |
+| `@commitlint/config-conventional` | `^21.2.0`       | Conventional Commits policy        |
 
-These majors preserve Frontprep v1's Node.js 20.9 floor. Husky 9 supports
-Node.js 18 or newer, lint-staged 15 supports Node.js 18.12 or newer, and
-commitlint 20 supports Node.js 18 or newer. The current lint-staged 16 and 17
-lines require newer Node.js 20 minors or Node.js 22, while commitlint 21
-requires Node.js 22; Frontprep therefore does not request their unconstrained
-latest majors.
+These are the maintained package lines compatible with Frontprep v1's exact
+Node.js 22.22.1 floor. Husky 9 supports Node.js 18 or newer, lint-staged 17.3
+requires Node.js 22.22.1 or newer, and commitlint 21.2 requires Node.js 22.12
+or newer. The requested ranges therefore share Frontprep's declared runtime
+contract without retaining deprecated package lines.
 
 An existing declaration may remain in either `dependencies` or
 `devDependencies` when its valid semver range intersects the requested range.
@@ -308,7 +307,7 @@ Unit and integration tests cover:
 
 A separate `pnpm verify:git-hooks-compatibility` acceptance fixture applies the
 real Quality and Git Hooks plans to a temporary project, performs a real pnpm
-10 installation under Node.js 20.9.0, activates Husky, and proves:
+10 installation under Node.js 22.22.1, activates Husky, and proves:
 
 - a staged JavaScript or TypeScript file is linted and formatted by the real
   pre-commit hook;
