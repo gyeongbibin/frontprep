@@ -178,7 +178,7 @@ export interface GitHooksAnalysis {
 }
 ```
 
-- [ ] **Step 1: Write failing plan-contract tests**
+- [x] **Step 1: Write failing plan-contract tests**
 
 Assert four development dependency intents, canonical `frontprep:prepare`, conditional `prepare` composition, two exact `.mjs` configs at `0644`, and these executable hook contents at `0755`:
 
@@ -192,29 +192,29 @@ pnpm exec commitlint --edit "$1"
 
 Cover missing `prepare`, a custom stage, every recognized direct Husky stage, duplicate recognized stages, and the false substring `echo husky`.
 
-- [ ] **Step 2: Run the focused module test and confirm the module is absent**
+- [x] **Step 2: Run the focused module test and confirm the module is absent**
 
 Run: `pnpm exec vitest run tests/modules/git-hooks.test.ts`
 
 Expected: FAIL because `src/modules/git-hooks.ts` does not exist.
 
-- [ ] **Step 3: Implement constants, prepare analysis, and intent creation**
+- [x] **Step 3: Implement constants, prepare analysis, and intent creation**
 
 Split scripts only on the literal delimiter `&&`. Recognize exactly `husky`, `pnpm husky`, `pnpm exec husky`, and `pnpm run frontprep:prepare`. Reject more than one recognized stage; set `integratePrepare` only when none exists. Emit no filesystem or process side effects.
 
-- [ ] **Step 4: Add failing ownership and configuration-conflict tests**
+- [x] **Step 4: Add failing ownership and configuration-conflict tests**
 
 Cover canonical missing/exact/manifest-owned files; unowned differing contents; wrong modes; symlinked `.husky` or managed paths; alternate root lint-staged and commitlint configs; nested lint-staged configs and package keys; competing hook-manager dependencies, keys, and root files; conflicting `core.hooksPath`; and non-sample default Git hook files. Confirm user hooks under `.husky/` and Git `.sample` files are preserved.
 
-- [ ] **Step 5: Implement deterministic conflict inspection**
+- [x] **Step 5: Implement deterministic conflict inspection**
 
 Scan sorted paths while ignoring `.git`, `.next`, `.turbo`, `.worktrees`, `build`, `coverage`, `dist`, `node_modules`, and `out`. Do not follow symbolic links. Accept unset `core.hooksPath` or `.husky/_`; reject every other value. Return the first sorted analysis conflict as `ConflictError` with module ID `git-hooks`.
 
-- [ ] **Step 6: Add failing aggregate verification tests**
+- [x] **Step 6: Add failing aggregate verification tests**
 
 Assert verification reports all incompatible dependencies, changed scripts, wrong bytes/modes, alternate configs, competing managers, active-path drift, and missing dispatcher in one deterministic issue list. Also assert a canonical installed fixture returns `{ valid: true, issues: [] }`.
 
-- [ ] **Step 7: Implement verification and run module checks**
+- [x] **Step 7: Implement verification and run module checks**
 
 Reuse conflict scanners without canonical ownership exceptions. Validate dependency range intersection, exactly one recognized prepare stage, exact owned script, canonical file snapshots, `.husky/_`, and `.husky/_/h`.
 
@@ -227,7 +227,7 @@ pnpm typecheck
 
 Expected: all tests and typecheck PASS.
 
-- [ ] **Step 8: Commit the module**
+- [x] **Step 8: Commit the module**
 
 ```bash
 git add src/modules/git-hooks.ts tests/modules/git-hooks.test.ts
