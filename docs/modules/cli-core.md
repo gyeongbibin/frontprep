@@ -218,18 +218,17 @@ Unit tests cover:
 
 Fixture tests initialize temporary Git repositories and commit their baseline before executing `init`. Core fixtures use fake modules and a fake package-manager service so core behavior is tested without depending on feature-module implementation or the network.
 
-The core branch's acceptance test packages the compiled executable, runs it
-through the public `bin`, and verifies help, version, unsupported-project, and
-supported core-only diagnostics. Full Next.js application acceptance is added
-as the feature modules land.
+Package acceptance compiles and installs the executable, runs the public `bin`,
+and verifies help, version, unsupported-project, and uninitialized-project
+diagnostics. CI acceptance separately drives the built five-module behavior
+through a real Next.js application under Node.js 22.22.1.
 
 ## Delivery and Package Acceptance
 
 The package is published as `@mingyeongbin/frontprep` with the `frontprep`
 binary and declares Node.js `>=22.22.1`; the production bundle targets
-`node22`. The core branch exposes `init` and `check`, but a supported project
-cannot complete `init` until all five feature modules are registered by their
-design-first branches.
+`node22`. The public `init` and `check` commands use all five v1 modules in
+fixed order while explicit registries remain injectable for focused tests.
 
 Each module branch starts from the latest merged `develop`, commits its module
 design before implementation and tests, opens as a draft PR, passes complete

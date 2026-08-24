@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { createModuleRegistry } from '../../src/modules/registry.js'
+import {
+  createModuleRegistry,
+  DEFAULT_MODULES,
+} from '../../src/modules/registry.js'
 import type { SetupModule } from '../../src/modules/types.js'
 
 function moduleWithId(id: SetupModule['id']): SetupModule {
@@ -14,6 +17,17 @@ function moduleWithId(id: SetupModule['id']): SetupModule {
 }
 
 describe('module registry', () => {
+  it('exports the frozen five-module production registry', () => {
+    expect(DEFAULT_MODULES.map(({ id }) => id)).toEqual([
+      'quality',
+      'tailwind',
+      'test',
+      'git-hooks',
+      'ci',
+    ])
+    expect(Object.isFrozen(DEFAULT_MODULES)).toBe(true)
+  })
+
   it('returns modules in the fixed v1 order', () => {
     const modules = createModuleRegistry([
       moduleWithId('ci'),

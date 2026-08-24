@@ -114,9 +114,9 @@ try {
     recursive: true,
   })
   initializeGit(supportedRoot)
-  const coreOnly = run(cli, ['init', '--cwd', supportedRoot])
-  assert.equal(coreOnly.status, 1)
-  assert.match(coreOnly.stderr, /Frontprep manifest is missing/u)
+  const uninitialized = run(cli, ['check', '--cwd', supportedRoot])
+  assert.equal(uninitialized.status, 1)
+  assert.match(uninitialized.stderr, /Frontprep manifest is missing/u)
 
   process.stdout.write('frontprep package verified\n')
 } finally {

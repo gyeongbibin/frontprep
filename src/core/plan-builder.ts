@@ -52,7 +52,7 @@ function appendUniqueLines(contents: string, lines: readonly string[]): string {
 }
 
 function ensureCssImport(contents: string, value: string): string {
-  const statement = `@import "${value}";`
+  const statement = `@import '${value}';`
   if (contents.split('\n').some((line) => line.trim() === statement)) {
     return contents
   }

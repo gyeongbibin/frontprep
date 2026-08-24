@@ -58,6 +58,9 @@ describe('package metadata', () => {
     expect(packageJson.scripts['verify:git-hooks-compatibility']).toBe(
       'vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/git-hooks-module.acceptance.ts',
     )
+    expect(packageJson.scripts['verify:ci-compatibility']).toBe(
+      'pnpm build && vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/ci-module.acceptance.ts',
+    )
   })
 
   it('packs only the executable, sourcemap, schema, and required metadata', async () => {

@@ -1,6 +1,19 @@
 import { ConflictError } from '../core/errors.js'
 import { MODULE_ORDER } from '../core/types.js'
+import { ciModule } from './ci.js'
+import { gitHooksModule } from './git-hooks.js'
+import { qualityModule } from './quality.js'
+import { tailwindModule } from './tailwind.js'
+import { testModule } from './test.js'
 import type { SetupModule } from './types.js'
+
+export const DEFAULT_MODULES: readonly SetupModule[] = Object.freeze([
+  qualityModule,
+  tailwindModule,
+  testModule,
+  gitHooksModule,
+  ciModule,
+])
 
 export function createModuleRegistry(
   modules: readonly SetupModule[] = [],

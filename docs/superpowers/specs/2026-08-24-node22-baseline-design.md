@@ -51,15 +51,20 @@ perform a real pnpm installation, and run the generated Vitest, React Testing
 Library, alias-resolution, and jest-dom assertion. Its bootstrap binary and
 assertion move from Node.js 20.9.0 to Node.js 22.22.1.
 
-The fast `pnpm check` suite remains network-independent. Networked exact-floor
-checks stay in the two explicit `verify:*` commands.
+The fast `pnpm check` suite remains network-independent. When this baseline
+shipped, exact-floor checks lived in `verify:package` and
+`verify:test-compatibility`. The completed v1 adds separate Quality, Git Hooks,
+and CI compatibility commands, so the current exact-floor matrix contains the
+package check plus four module compatibility checks.
 
 ## Scope Boundaries
 
-This migration does not upgrade Test module dependency majors, change
-generated configuration bytes, add Git Hooks dependencies, or register any
-feature module by default. The Git Hooks branch will rebase after this change
-and select the maintained dependency lines allowed by the new floor.
+At the time of this migration, it did not upgrade Test module dependency
+majors, change generated configuration bytes, add Git Hooks dependencies, or
+register feature modules by default. Subsequent design-first branches added Git
+Hooks and CI, resolved cross-module compatibility, and activated the completed
+five-module default registry. Those later changes do not alter this baseline's
+Node.js floor.
 
 No Node.js 20 compatibility alias or warning mode is provided. Consumers that
 must remain on Node.js 20 are outside the v1 beta support matrix.

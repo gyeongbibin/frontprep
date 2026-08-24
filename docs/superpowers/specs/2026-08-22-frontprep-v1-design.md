@@ -266,7 +266,7 @@ Quality owns ESLint flat configuration, Prettier base configuration, `.prettieri
 
 ### Tailwind
 
-Tailwind owns the Tailwind CSS v4 PostCSS integration, the single `@import "tailwindcss";` entry, runtime styling utilities, and Tailwind-aware Prettier contributions. It creates `shared/utils` under the detected source root and exports `cn`, `cva`, and `VariantProps`.
+Tailwind owns the Tailwind CSS v4 PostCSS integration, the single `@import 'tailwindcss';` entry, runtime styling utilities, and Tailwind-aware Prettier contributions. The single-quoted CSS import matches the shared `singleQuote: true` Prettier policy. It creates `shared/utils` under the detected source root and exports `cn`, `cva`, and `VariantProps`.
 
 ### Test
 

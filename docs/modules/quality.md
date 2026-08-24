@@ -186,9 +186,9 @@ JavaScript.
 - one `config-fragment` intent for Prettier;
 - one `line-set` intent for `.prettierignore`.
 
-The module is not added to the default CLI registry until all five v1 modules
-exist. Its contract is exercised directly and through the core plan builder in
-this branch.
+The production CLI registers Quality first in the fixed five-module order. Its
+contract is exercised directly, through the core plan builder, and through the
+complete public CLI acceptance path.
 
 ## Verification
 

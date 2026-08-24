@@ -24,7 +24,7 @@ import type {
 } from './types.js'
 
 const MODULE_ID = 'tailwind' as const
-const CANONICAL_CSS_IMPORT = '@import "tailwindcss";'
+const CANONICAL_CSS_IMPORT = "@import 'tailwindcss';"
 
 const POSTCSS_CONFIG = `const config = {
   plugins: {

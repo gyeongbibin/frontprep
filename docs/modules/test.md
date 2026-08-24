@@ -176,9 +176,9 @@ consumer JavaScript or TypeScript.
 - one append-once `script` intent for the Test stage of `frontprep:check`;
 - two preserve-existing `script` intents for `test` and `test:run`.
 
-The module is not added to the default CLI registry until all five v1 modules
-exist. Its contract is exercised directly and through an injected five-module
-registry in this branch.
+The production CLI registers Test third in the fixed five-module order. Its
+contract is exercised directly, through injected registries, and through the
+complete public CLI acceptance path.
 
 ## Verification
 

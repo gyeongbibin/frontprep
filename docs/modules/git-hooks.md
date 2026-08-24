@@ -255,9 +255,9 @@ verification may execute only fixed, read-only Git inspection commands through
 core helpers: local `core.hooksPath` lookup and default hooks-directory
 resolution.
 
-The module remains out of the default CLI registry until the CI module exists
-and all five v1 modules can be registered together. Its contract is exercised
-directly and through an injected five-module registry in this branch.
+The production CLI registers Git Hooks fourth in the fixed five-module order.
+Its contract is exercised directly, through injected registries, and through
+the complete public CLI acceptance path.
 
 ## Verification
 

@@ -23,7 +23,8 @@
     "verify:package": "pnpm build && pnpm --silent dlx --package=node@22.22.1 node scripts/verify-package.mjs",
     "verify:quality-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/quality-module.acceptance.ts",
     "verify:test-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/test-module.acceptance.ts",
-    "verify:git-hooks-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/git-hooks-module.acceptance.ts"
+    "verify:git-hooks-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/git-hooks-module.acceptance.ts",
+    "verify:ci-compatibility": "pnpm build && vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/ci-module.acceptance.ts"
   },
   "engines": {
     "node": ">=22.22.1"
