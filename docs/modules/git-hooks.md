@@ -250,7 +250,10 @@ the first issue. Verification reuses the scanners and aggregates every issue.
 
 Immediate activation is transaction orchestration, not a module change intent.
 The module never writes files, modifies Git configuration, installs packages,
-or runs commands from `analyze`, `plan`, or `verify`.
+or runs mutating commands from `analyze`, `plan`, or `verify`. Analysis and
+verification may execute only fixed, read-only Git inspection commands through
+core helpers: local `core.hooksPath` lookup and default hooks-directory
+resolution.
 
 The module remains out of the default CLI registry until the CI module exists
 and all five v1 modules can be registered together. Its contract is exercised

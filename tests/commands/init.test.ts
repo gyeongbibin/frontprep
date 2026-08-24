@@ -245,4 +245,33 @@ describe('runInit', () => {
     )
     expect(gitHooks.events).toEqual(['activate', 'restore'])
   })
+
+  it('does not activate an empty Git Hooks plan after cancellation', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+    const calls: string[] = []
+    const gitHooks = new RecordingGitHooks()
+    const controller = new AbortController()
+    controller.abort()
+    const services: CommandServices = {
+      applyPlan: async () => {
+        throw new Error('must not apply')
+      },
+      assertSafeGitState: async () => undefined,
+      buildPlan: async () => EMPTY_PLAN,
+      detectProject: async () => context,
+      frontprepVersion: '0.1.0-beta.0',
+      gitHooks,
+      modules: [setupModule('git-hooks', calls)],
+      reporter: new RecordingReporter(),
+      runProjectCheck: async () => undefined,
+      verifyModules: async () => ({ issues: [], valid: true }),
+      verifyStructure: async () => ({ issues: [], valid: true }),
+    }
+
+    await expect(
+      runInit({ cwd: project.root, signal: controller.signal }, services),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(gitHooks.events).toEqual([])
+  })
 })

@@ -131,11 +131,15 @@ async function verifyEmptyPlan(
 ): Promise<void> {
   let activation: GitHooksActivation | null = null
   try {
+    signal?.throwIfAborted()
     if (includesGitHooks(services.modules)) {
       activation = await services.gitHooks.activate(context.root, signal)
     }
+    signal?.throwIfAborted()
     assertValid(await services.verifyStructure(context, services.modules))
+    signal?.throwIfAborted()
     await services.runProjectCheck(context.root, signal)
+    signal?.throwIfAborted()
   } catch (error) {
     if (activation !== null) {
       try {

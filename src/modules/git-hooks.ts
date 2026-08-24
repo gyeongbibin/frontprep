@@ -63,33 +63,6 @@ const CANONICAL_FILES = Object.freeze([
   ],
 ] as const)
 
-const ALTERNATE_ROOT_CONFIGS = Object.freeze([
-  ['.commitlintrc', 'commitlint configuration'],
-  ['.commitlintrc.cjs', 'commitlint configuration'],
-  ['.commitlintrc.js', 'commitlint configuration'],
-  ['.commitlintrc.json', 'commitlint configuration'],
-  ['.commitlintrc.mjs', 'commitlint configuration'],
-  ['.commitlintrc.yaml', 'commitlint configuration'],
-  ['.commitlintrc.yml', 'commitlint configuration'],
-  ['.lintstagedrc', 'lint-staged configuration'],
-  ['.lintstagedrc.cjs', 'lint-staged configuration'],
-  ['.lintstagedrc.js', 'lint-staged configuration'],
-  ['.lintstagedrc.json', 'lint-staged configuration'],
-  ['.lintstagedrc.mjs', 'lint-staged configuration'],
-  ['.lintstagedrc.yaml', 'lint-staged configuration'],
-  ['.lintstagedrc.yml', 'lint-staged configuration'],
-  ['commitlint.config.cjs', 'commitlint configuration'],
-  ['commitlint.config.cts', 'commitlint configuration'],
-  ['commitlint.config.js', 'commitlint configuration'],
-  ['commitlint.config.mts', 'commitlint configuration'],
-  ['commitlint.config.ts', 'commitlint configuration'],
-  ['lint-staged.config.cjs', 'lint-staged configuration'],
-  ['lint-staged.config.cts', 'lint-staged configuration'],
-  ['lint-staged.config.js', 'lint-staged configuration'],
-  ['lint-staged.config.mts', 'lint-staged configuration'],
-  ['lint-staged.config.ts', 'lint-staged configuration'],
-] as const)
-
 const COMPETING_DEPENDENCIES = Object.freeze([
   '@evilmartians/lefthook',
   'lefthook',
@@ -177,9 +150,9 @@ function declaredDependency(
 }
 
 function recognizedPrepareStages(command: string | undefined): string[] {
-  return (command?.split(' && ') ?? []).filter((stage) =>
-    RECOGNIZED_PREPARE_STAGES.has(stage),
-  )
+  return (command?.split('&&') ?? [])
+    .map((stage) => stage.trim())
+    .filter((stage) => RECOGNIZED_PREPARE_STAGES.has(stage))
 }
 
 function isLintStagedConfig(name: string): boolean {
@@ -188,6 +161,21 @@ function isLintStagedConfig(name: string): boolean {
     name === '.lintstagedrc' ||
     name.startsWith('.lintstagedrc.')
   )
+}
+
+function alternateRootConfigurationLabel(name: string): string | null {
+  if (name !== 'lint-staged.config.mjs' && isLintStagedConfig(name)) {
+    return 'lint-staged configuration'
+  }
+  if (
+    name !== 'commitlint.config.mjs' &&
+    (name.startsWith('commitlint.config.') ||
+      name === '.commitlintrc' ||
+      name.startsWith('.commitlintrc.'))
+  ) {
+    return 'commitlint configuration'
+  }
+  return null
 }
 
 async function canonicalOwnershipIssues(
@@ -238,11 +226,19 @@ async function rootConfigurationIssues(
 ): Promise<readonly VerificationIssue[]> {
   const issues: VerificationIssue[] = []
   const fileSystem = new FileSystem(context.root)
-  for (const [path, label] of ALTERNATE_ROOT_CONFIGS) {
-    const snapshot = await safeSnapshot(fileSystem, path)
-    if (snapshot === null || snapshot.exists) {
-      issues.push(conflictIssue(label, path))
+  try {
+    const entries = await readdir(context.root, { withFileTypes: true })
+    entries.sort((left, right) => left.name.localeCompare(right.name))
+    for (const entry of entries) {
+      const label = alternateRootConfigurationLabel(entry.name)
+      if (label !== null) {
+        issues.push(conflictIssue(label, entry.name))
+      }
     }
+  } catch {
+    issues.push(
+      issue('Git Hooks configuration directory could not be inspected.', '.'),
+    )
   }
   for (const path of COMPETING_ROOT_CONFIGS) {
     const snapshot = await safeSnapshot(fileSystem, path)

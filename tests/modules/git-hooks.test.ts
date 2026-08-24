@@ -164,6 +164,8 @@ describe('git hooks module plan', () => {
     'pnpm husky',
     'pnpm exec husky',
     'pnpm run frontprep:prepare',
+    'generate&&husky',
+    'pnpm exec husky&&generate',
   ])('preserves the recognized prepare stage %s', async (prepare) => {
     const { context } = await contextWithPrepare(prepare)
     const analysis = await gitHooksModule.analyze(context)
@@ -196,6 +198,18 @@ describe('git hooks module plan', () => {
       path: 'package.json',
     })
   })
+
+  it('rejects compact duplicate prepare stages', async () => {
+    const { context } = await contextWithPrepare(
+      'husky&&pnpm run frontprep:prepare',
+    )
+
+    await expect(gitHooksModule.analyze(context)).rejects.toMatchObject({
+      code: 'CONFIGURATION_CONFLICT',
+      moduleId: 'git-hooks',
+      path: 'package.json',
+    })
+  })
 })
 
 describe('git hooks module conflicts', () => {
@@ -211,8 +225,10 @@ describe('git hooks module conflicts', () => {
 
   it.each([
     ['lint-staged.config.js', 'export default {}\n'],
+    ['lint-staged.config.json', '{}\n'],
     ['.lintstagedrc.json', '{}\n'],
     ['commitlint.config.js', 'export default {}\n'],
+    ['commitlint.config.json', '{}\n'],
     ['.commitlintrc.yml', 'rules: {}\n'],
     ['lefthook.yml', 'pre-commit: {}\n'],
     ['.pre-commit-config.yaml', 'repos: []\n'],

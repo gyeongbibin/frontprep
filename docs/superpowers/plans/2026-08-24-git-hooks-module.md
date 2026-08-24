@@ -15,7 +15,7 @@
 - The module works from the detected Git/package root and never assumes `app/` or `src/app/`.
 - Requested dependencies are `husky@^9.1.0`, `lint-staged@^17.3.0`, `@commitlint/cli@^21.2.0`, and `@commitlint/config-conventional@^21.2.0`.
 - Managed hooks are `.husky/pre-commit` and `.husky/commit-msg` with mode `0755`; managed JavaScript configs use `.mjs` and mode `0644`.
-- Module methods return declarative intents only. Only `GitHooksManager` may run Husky or mutate repository-local Git configuration.
+- Module methods return declarative intents only. Analysis and verification may run fixed, read-only Git inspection through core helpers; only `GitHooksManager` may run Husky or mutate repository-local Git configuration.
 - Activation runs after an optional `pnpm install --ignore-scripts` and before module/project verification.
 - Any later failure restores the previous `core.hooksPath`; Husky-owned `.husky/_` and package-manager-owned `node_modules` remain outside tracked-file rollback.
 - `frontprep check` is read-only and never repairs hooks.
@@ -324,11 +324,11 @@ git status --short
 
 Expected: all checks PASS, the worktree is clean after commits, and exact-floor fixtures are independent.
 
-- [ ] **Step 2: Push and open a draft PR**
+- [x] **Step 2: Push and open a draft PR**
 
 Push `feat/git-hooks-module`, open a draft PR to `develop`, and include design, Node/package rationale, TDD failures, exact test counts, transaction rollback evidence, and real hook results.
 
-- [ ] **Step 3: Request independent review**
+- [x] **Step 3: Request independent review**
 
 Review module conflicts, script composition, Git worktree path handling, activation/restore ordering, symlink safety, hook shell quoting, exact Node inheritance, real offline commits, and stale documentation. Fix every Critical or Important finding through a failing test first.
 
