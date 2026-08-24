@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "frontprepVersion",
+    "adapter",
+    "packageManager",
+    "paths",
+    "modules",
+    "files",
+    "managedScripts"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json"
+    },
+    "schemaVersion": { "const": 1 },
+    "frontprepVersion": { "type": "string", "minLength": 1 },
+    "adapter": { "const": "next-app" },
+    "packageManager": { "type": "string", "pattern": "^pnpm@10\\." },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app", "stylesheet"],
+      "properties": {
+        "app": { "$ref": "#/$defs/projectPath" },
+        "stylesheet": { "$ref": "#/$defs/projectPath" }
+      }
+    },
+    "modules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["quality", "tailwind", "test", "git-hooks", "ci"],
+      "properties": {
+        "quality": { "type": "string", "minLength": 1 },
+        "tailwind": { "type": "string", "minLength": 1 },
+        "test": { "type": "string", "minLength": 1 },
+        "git-hooks": { "type": "string", "minLength": 1 },
+        "ci": { "type": "string", "minLength": 1 }
+      }
+    },
+    "files": {
+      "type": "object",
+      "propertyNames": { "$ref": "#/$defs/projectPath" },
+      "additionalProperties": { "$ref": "#/$defs/fileRecord" }
+    },
+    "managedScripts": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "projectPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\)(?!.*\\u0000).+$"
+    },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hash", "ownership", "mode"],
+      "properties": {
+        "hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "ownership": { "enum": ["managed", "patched"] },
+        "mode": { "type": "string", "pattern": "^0[0-7]{3}$" }
+      }
+    }
+  }
+}

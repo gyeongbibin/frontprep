@@ -1,0 +1,71 @@
+{
+  "name": "@mingyeongbin/frontprep",
+  "version": "0.1.0-beta.0",
+  "description": "An opinionated CLI for setting up frontend project tooling.",
+  "keywords": [
+    "frontend",
+    "nextjs",
+    "pnpm",
+    "setup",
+    "tooling"
+  ],
+  "homepage": "https://github.com/gyeongbibin/frontprep#readme",
+  "bugs": {
+    "url": "https://github.com/gyeongbibin/frontprep/issues"
+  },
+  "type": "module",
+  "bin": {
+    "frontprep": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test:run",
+    "verify:package": "pnpm build && pnpm --silent dlx --package=node@22.22.1 node scripts/verify-package.mjs",
+    "verify:quality-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/quality-module.acceptance.ts",
+    "verify:test-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/test-module.acceptance.ts",
+    "verify:git-hooks-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/git-hooks-module.acceptance.ts",
+    "verify:ci-compatibility": "pnpm build && vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/ci-module.acceptance.ts"
+  },
+  "engines": {
+    "node": ">=22.22.1"
+  },
+  "packageManager": "pnpm@10.22.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gyeongbibin/frontprep.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "commander": "^14.0.3",
+    "jsonc-parser": "^3.3.1",
+    "picocolors": "^1.1.1",
+    "semver": "^7.8.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "@types/node": "^22.20.0",
+    "@types/semver": "^7.8.0",
+    "eslint": "^9.39.0",
+    "prettier": "^3.9.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.11"
+  }
+}
