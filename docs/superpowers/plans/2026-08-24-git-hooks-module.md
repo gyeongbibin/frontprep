@@ -118,29 +118,29 @@ git commit -m "feat: add git hooks activation service"
 - Consumes: `GitHooksService` and `GitHooksActivation` from Task 1.
 - Produces optional transaction inputs `activateGitHooks?: boolean` and `gitHooks?: GitHooksService`, plus required production `CommandServices.gitHooks: GitHooksService`.
 
-- [ ] **Step 1: Write failing non-empty transaction tests**
+- [x] **Step 1: Write failing non-empty transaction tests**
 
 Add a recording Git Hooks service. Assert activation occurs after dependency installation but before verification and that a verification failure invokes `restore` with the returned receipt. Assert install failure never activates hooks and a non-Git-Hooks transaction never calls the service.
 
-- [ ] **Step 2: Run transaction tests and observe missing integration**
+- [x] **Step 2: Run transaction tests and observe missing integration**
 
 Run: `pnpm exec vitest run tests/core/transaction.test.ts`
 
 Expected: FAIL because `TransactionServices` and `applyPlan` do not accept or call the service.
 
-- [ ] **Step 3: Integrate activation into `applyPlan`**
+- [x] **Step 3: Integrate activation into `applyPlan`**
 
 After the optional dependency install, execute activation only when `activateGitHooks === true`. Preserve its receipt and, in the catch path, attempt Git restoration and tracked-file restoration independently, accumulating both restoration failures into the existing `ROLLBACK_FAILED` error.
 
-- [ ] **Step 4: Write failing empty-plan command tests**
+- [x] **Step 4: Write failing empty-plan command tests**
 
 For a registry containing `git-hooks`, assert `runInit` activates before structural verification even when `plan.operations` is empty. Force project verification to fail and assert the receipt is restored. Assert registries without `git-hooks` do not activate.
 
-- [ ] **Step 5: Integrate activation into `runInit`**
+- [x] **Step 5: Integrate activation into `runInit`**
 
 `createCommandServices` constructs one `GitHooksManager`. The non-empty path forwards that service and a module-presence flag into `applyPlan`. The empty path activates, runs structural/project verification, and restores only if later verification throws. Successful empty activation remains active while the returned `TransactionResult.changed` stays `false`.
 
-- [ ] **Step 6: Run focused command and transaction verification**
+- [x] **Step 6: Run focused command and transaction verification**
 
 Run:
 
@@ -151,7 +151,7 @@ pnpm typecheck
 
 Expected: all tests and typecheck PASS.
 
-- [ ] **Step 7: Commit orchestration**
+- [x] **Step 7: Commit orchestration**
 
 ```bash
 git add src/core/transaction.ts src/commands/init.ts tests/core/transaction.test.ts tests/commands/init.test.ts tests/modules/tailwind.test.ts tests/modules/test.test.ts

@@ -1,4 +1,9 @@
-import { VerificationError } from '../core/errors.js'
+import { FrontprepError, VerificationError } from '../core/errors.js'
+import {
+  GitHooksManager,
+  type GitHooksActivation,
+  type GitHooksService,
+} from '../core/git-hooks.js'
 import { assertSafeGitState } from '../core/git-guard.js'
 import { buildPlan } from '../core/plan-builder.js'
 import type { ChangeIntent } from '../core/intents.js'
@@ -48,6 +53,7 @@ export interface CommandServices {
   ): Promise<ChangePlan>
   detectProject(cwd: string): Promise<ProjectContext>
   frontprepVersion: string
+  gitHooks: GitHooksService
   modules: readonly SetupModule[]
   reporter: CommandReporter
   runProjectCheck(root: string, signal?: AbortSignal): Promise<void>
@@ -71,6 +77,7 @@ export function createCommandServices(
     buildPlan,
     detectProject,
     frontprepVersion: FRONTPREP_VERSION,
+    gitHooks: new GitHooksManager(),
     modules: createModuleRegistry(modules),
     reporter,
     runProjectCheck,
@@ -97,6 +104,50 @@ function moduleVersions(
   ) as Record<ModuleId, string>
 }
 
+function includesGitHooks(modules: readonly SetupModule[]): boolean {
+  return modules.some(({ id }) => id === 'git-hooks')
+}
+
+function activationRollbackFailure(
+  original: unknown,
+  restoration: unknown,
+): FrontprepError {
+  return new FrontprepError(
+    'Frontprep could not restore Git hook configuration after verification failed.',
+    {
+      cause: { original, restoration },
+      code: 'ROLLBACK_FAILED',
+      exitCode: 1,
+      phase: 'application',
+      recovery: 'Restore core.hooksPath with git config --local and retry.',
+    },
+  )
+}
+
+async function verifyEmptyPlan(
+  context: ProjectContext,
+  services: CommandServices,
+  signal?: AbortSignal,
+): Promise<void> {
+  let activation: GitHooksActivation | null = null
+  try {
+    if (includesGitHooks(services.modules)) {
+      activation = await services.gitHooks.activate(context.root, signal)
+    }
+    assertValid(await services.verifyStructure(context, services.modules))
+    await services.runProjectCheck(context.root, signal)
+  } catch (error) {
+    if (activation !== null) {
+      try {
+        await services.gitHooks.restore(context.root, activation)
+      } catch (restoration) {
+        throw activationRollbackFailure(error, restoration)
+      }
+    }
+    throw error
+  }
+}
+
 export async function runInit(
   options: InitOptions,
   services: CommandServices = createCommandServices(),
@@ -115,8 +166,7 @@ export async function runInit(
 
   let transaction: TransactionResult
   if (plan.operations.length === 0) {
-    assertValid(await services.verifyStructure(context, services.modules))
-    await services.runProjectCheck(context.root, options.signal)
+    await verifyEmptyPlan(context, services, options.signal)
     transaction = {
       changed: false,
       changedFiles: [],
@@ -125,6 +175,8 @@ export async function runInit(
   } else {
     transaction = await services.applyPlan(context, plan, {
       frontprepVersion: services.frontprepVersion,
+      activateGitHooks: includesGitHooks(services.modules),
+      gitHooks: services.gitHooks,
       moduleVersions: moduleVersions(services.modules),
       signal: options.signal,
       verify: async (root, signal) => {
