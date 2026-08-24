@@ -11,10 +11,16 @@ const root = new URL('..', import.meta.url)
 
 interface PackageJson {
   bin: Record<string, string>
+  bugs: { url: string }
   devDependencies: Record<string, string>
   engines: { node: string }
   files: string[]
+  homepage: string
+  keywords: string[]
+  license: string
   name: string
+  publishConfig: { access: string }
+  repository: { type: string; url: string }
   scripts: Record<string, string>
 }
 
@@ -41,6 +47,25 @@ describe('package metadata', () => {
 
     expect(packageJson.name).toBe('@mingyeongbin/frontprep')
     expect(packageJson.bin).toEqual({ frontprep: 'dist/cli.js' })
+    expect(packageJson.homepage).toBe(
+      'https://github.com/gyeongbibin/frontprep#readme',
+    )
+    expect(packageJson.bugs).toEqual({
+      url: 'https://github.com/gyeongbibin/frontprep/issues',
+    })
+    expect(packageJson.keywords).toEqual([
+      'frontend',
+      'nextjs',
+      'pnpm',
+      'setup',
+      'tooling',
+    ])
+    expect(packageJson.license).toBe('MIT')
+    expect(packageJson.publishConfig).toEqual({ access: 'public' })
+    expect(packageJson.repository).toEqual({
+      type: 'git',
+      url: 'git+https://github.com/gyeongbibin/frontprep.git',
+    })
     expect(packageJson.engines.node).toBe('>=22.22.1')
     expect(packageJson.devDependencies['@types/node']).toBe('^22.20.0')
     expect(packageJson.devDependencies.eslint).toBe('^9.39.0')
@@ -72,6 +97,7 @@ describe('package metadata', () => {
     const packed = (JSON.parse(stdout) as PackResult[])[0]!
 
     expect(packed.files.map(({ path }) => path)).toEqual([
+      'LICENSE',
       'README.md',
       'dist/cli.js',
       'dist/cli.js.map',

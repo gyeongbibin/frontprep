@@ -15,6 +15,7 @@ import { fileURLToPath, URL } from 'node:url'
 
 const root = dirname(fileURLToPath(new URL('../package.json', import.meta.url)))
 const expectedFiles = [
+  'LICENSE',
   'README.md',
   'dist/cli.js',
   'dist/cli.js.map',
