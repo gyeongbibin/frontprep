@@ -311,7 +311,7 @@ git commit -m "test: verify git hooks compatibility"
 - Consumes: complete Git Hooks branch diff and every repository/acceptance check.
 - Produces: a reviewed PR merged into `develop`, leaving CI as the next module.
 
-- [ ] **Step 1: Run fresh verification**
+- [x] **Step 1: Run fresh verification**
 
 ```bash
 pnpm check
