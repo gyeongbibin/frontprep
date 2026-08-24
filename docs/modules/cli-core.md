@@ -220,7 +220,7 @@ Fixture tests initialize temporary Git repositories and commit their baseline be
 
 Package acceptance compiles and installs the executable, runs the public `bin`,
 and verifies help, version, unsupported-project, and uninitialized-project
-diagnostics. CI acceptance separately drives the installed five-module behavior
+diagnostics. CI acceptance separately drives the built five-module behavior
 through a real Next.js application under Node.js 22.22.1.
 
 ## Delivery and Package Acceptance

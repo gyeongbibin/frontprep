@@ -213,7 +213,7 @@ Unit tests cover:
 - transaction rollback when the project check fails.
 
 Acceptance verification creates a clean minimal Next.js 16 project, runs the
-packaged CLI under Node.js 22.22.1 with the production default registry,
+built CLI under Node.js 22.22.1 with the production default registry,
 installs from a generated lockfile, and proves that:
 
 - all five modules apply through one public `frontprep init`;
@@ -221,7 +221,7 @@ installs from a generated lockfile, and proves that:
   and a real Next production build;
 - the generated workflow parses as YAML and matches the canonical policy;
 - a second `frontprep init` is byte-for-byte idempotent and skips installation;
-- public `frontprep check` succeeds on the installed result.
+- public `frontprep check` succeeds on the configured result.
 
 GitHub-hosted runner execution itself is not emulated locally. The acceptance
 test validates every workflow field plus the exact commands the runner will
