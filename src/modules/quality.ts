@@ -131,7 +131,7 @@ const PRETTIER_IGNORE_LINES = Object.freeze([
 ])
 
 const DEPENDENCIES = Object.freeze([
-  ['eslint', '^10.0.0'],
+  ['eslint', '^9.39.0'],
   ['eslint-config-next', '^16.0.0'],
   ['prettier', '^3.0.0'],
 ] as const)

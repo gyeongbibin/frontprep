@@ -21,7 +21,8 @@
     "test:run": "vitest run",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test:run",
     "verify:package": "pnpm build && pnpm --silent dlx --package=node@22.22.1 node scripts/verify-package.mjs",
-    "verify:test-compatibility": "vitest run --config tests/acceptance/vitest.config.ts"
+    "verify:quality-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/quality-module.acceptance.ts",
+    "verify:test-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/test-module.acceptance.ts"
   },
   "engines": {
     "node": ">=22.22.1"
@@ -44,10 +45,10 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.39.0",
     "@types/node": "^22.20.0",
     "@types/semver": "^7.8.0",
-    "eslint": "^10.9.0",
+    "eslint": "^9.39.0",
     "prettier": "^3.9.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
