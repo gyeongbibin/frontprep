@@ -157,7 +157,7 @@ git diff --check origin/develop...HEAD
 git status --short
 ```
 
-- [ ] **Step 2: Open a draft PR and request independent review**
+- [x] **Step 2: Open a draft PR and request independent review**
 
 Push `fix/quality-eslint-compatibility`, open a draft PR to `develop`, and
 request read-only review of the root cause, range alignment, exact-floor

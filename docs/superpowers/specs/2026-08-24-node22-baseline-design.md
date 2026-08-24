@@ -3,11 +3,13 @@
 ## Context
 
 Frontprep v1 currently declares Node.js 20.9 as its minimum runtime. Node.js
-20 reached end of life on 2026-04-30. The maintained ESLint 10 line requires
-Node.js 20.19, Node.js 22.13, or Node.js 24, while the maintained lint-staged
-17 line required by the upcoming Git Hooks module requires Node.js 22.22.1.
-Keeping Node.js 20.9 would force a newly released CLI to generate the
-deprecated ESLint 9 line and emit package-manager warnings for consumers.
+20 reached end of life on 2026-04-30. ESLint 10 requires Node.js 20.19,
+Node.js 22.13, or Node.js 24, while the maintained lint-staged 17 line required
+by the Git Hooks module requires Node.js 22.22.1. The later
+[Quality ESLint compatibility decision](2026-08-24-quality-eslint-compatibility-design.md)
+temporarily pins generated projects to ESLint 9 because Next.js 16's current
+React plugin is not compatible with ESLint 10; this does not change the Node
+runtime decision.
 
 ## Decision
 
@@ -16,8 +18,10 @@ pre-release compatibility correction, not a backward-incompatible change to a
 published stable version.
 
 The exact floor is selected from the strictest maintained tool in the planned
-v1 dependency graph. It permits ESLint 10, lint-staged 17, commitlint 21,
-Next.js 16, pnpm 10, Vitest 4, and the already selected Vite 6 test pipeline.
+v1 dependency graph, lint-staged 17. It also supports commitlint 21, Next.js
+16, pnpm 10, Vitest 4, and the selected Vite 6 test pipeline. ESLint remains
+at the compatibility-tested 9.39 line until the complete Next.js plugin graph
+supports ESLint 10.
 
 ## Repository Contract
 

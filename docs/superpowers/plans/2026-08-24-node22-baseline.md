@@ -200,7 +200,8 @@ Expected: build succeeds and stdout contains `frontprep package verified`.
 
 Use `Node.js 22.22.1 or newer`, `Node.js 22.22.1+`, or `>=22.22.1` according
 to the surrounding prose or code shape. Update the CLI-core dependency plan to
-`@types/node@^22.20.0` and keep ESLint 10.
+`@types/node@^22.20.0`; the later Quality compatibility decision supersedes
+its ESLint range with `eslint@^9.39.0` and `@eslint/js@^9.39.0`.
 
 - [x] **Step 2: Rewrite compatibility rationale rather than blind replacement**
 
