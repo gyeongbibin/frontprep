@@ -21,7 +21,7 @@ import {
   verifyModules,
   verifyStructure,
 } from '../core/verifier.js'
-import { createModuleRegistry } from '../modules/registry.js'
+import { createModuleRegistry, DEFAULT_MODULES } from '../modules/registry.js'
 import type { SetupModule, VerificationResult } from '../modules/types.js'
 import { FRONTPREP_VERSION } from '../version.js'
 
@@ -69,7 +69,7 @@ export interface CommandServices {
 
 export function createCommandServices(
   reporter: CommandReporter = new Reporter(),
-  modules: readonly SetupModule[] = [],
+  modules: readonly SetupModule[] = DEFAULT_MODULES,
 ): CommandServices {
   return {
     applyPlan,

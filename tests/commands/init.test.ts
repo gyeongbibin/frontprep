@@ -84,6 +84,14 @@ function setupModule(id: ModuleId, calls: string[]): SetupModule<string> {
 }
 
 describe('runInit', () => {
+  it('uses all five v1 modules by default', () => {
+    expect(
+      createCommandServices(new RecordingReporter()).modules.map(
+        ({ id }) => id,
+      ),
+    ).toEqual(['quality', 'tailwind', 'test', 'git-hooks', 'ci'])
+  })
+
   it('normalizes module order and rejects duplicate IDs at the service boundary', () => {
     const calls: string[] = []
     const quality = setupModule('quality', calls)
