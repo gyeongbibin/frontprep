@@ -60,7 +60,7 @@ export async function hasHuskyDispatcher(root: string): Promise<boolean>
 export class GitHooksManager implements GitHooksService
 ```
 
-- [ ] **Step 1: Write failing Git inspection tests**
+- [x] **Step 1: Write failing Git inspection tests**
 
 Use a recording runner to assert `readLocalHooksPath` executes:
 
@@ -70,13 +70,13 @@ Use a recording runner to assert `readLocalHooksPath` executes:
 
 Return `null` only for `ProcessFailure.exitCode === 1`, trim a successful value, and propagate every other failure. Assert `resolveDefaultHooksDirectory` uses `git rev-parse --path-format=absolute --git-path hooks` and returns a trimmed absolute path. Assert a regular `.husky/_/h` is accepted while missing files, directories, and symbolic links are rejected.
 
-- [ ] **Step 2: Run the focused tests and confirm missing exports fail**
+- [x] **Step 2: Run the focused tests and confirm missing exports fail**
 
 Run: `pnpm exec vitest run tests/core/git-hooks.test.ts`
 
 Expected: FAIL because `src/core/git-hooks.ts` does not exist.
 
-- [ ] **Step 3: Implement inspection and activation**
+- [x] **Step 3: Implement inspection and activation**
 
 `activate` records the local value, returns `null` only when the value is `.husky/_` and the dispatcher is a regular non-symbolic file, otherwise runs:
 
@@ -86,7 +86,7 @@ await runner.run('pnpm', ['run', 'frontprep:prepare'], { cwd: root, signal })
 
 It then requires both `core.hooksPath === '.husky/_'` and a valid dispatcher. On activation failure it restores the recorded value before rethrowing. `restore` uses `git config --local core.hooksPath <previous>` for a previous value and `git config --local --unset-all core.hooksPath` for `null`.
 
-- [ ] **Step 4: Verify command, no-op, validation, and restoration cases**
+- [x] **Step 4: Verify command, no-op, validation, and restoration cases**
 
 Cover unset and existing restoration, already-active no-op, incorrect post-command path, missing dispatcher, command failure, and restoration failure. Run:
 
@@ -94,7 +94,7 @@ Cover unset and existing restoration, already-active no-op, incorrect post-comma
 
 Expected: all tests PASS.
 
-- [ ] **Step 5: Commit the service**
+- [x] **Step 5: Commit the service**
 
 ```bash
 git add src/core/git-hooks.ts tests/core/git-hooks.test.ts
