@@ -41,7 +41,6 @@ YAML 2, npm pack/install, GitHub Actions
 
 - Create: `LICENSE`
 - Create: `CHANGELOG.md`
-- Create: `tests/release-metadata.test.ts`
 - Modify: `package.json`
 - Modify: `README.md`
 - Modify: `tests/package.test.ts`
@@ -49,18 +48,17 @@ YAML 2, npm pack/install, GitHub Actions
 
 - [ ] **Step 1: Write failing metadata and packed-file tests**
 
-Add `tests/release-metadata.test.ts` to assert the canonical MIT copyright,
-the `0.1.0-beta.0` changelog heading/date and prerelease content, and the README
-beta install/init/check commands. Extend `tests/package.test.ts` to assert the
-homepage, issue tracker, keywords, license, publish access, repository, and the
-exact packed file list including `LICENSE` and `CHANGELOG.md`.
+Extend `tests/package.test.ts` to assert the homepage, issue tracker, keywords,
+license, publish access, repository, and the exact packed file list including
+`LICENSE`. Human-facing README and changelog prose are reviewed directly rather
+than frozen by source-text tests.
 
 - [ ] **Step 2: Confirm the focused release tests fail**
 
 Run:
 
 ```sh
-pnpm exec vitest run tests/package.test.ts tests/release-metadata.test.ts
+pnpm exec vitest run tests/package.test.ts
 ```
 
 Expected: FAIL because release files and metadata are absent and the tarball
@@ -70,14 +68,15 @@ contract still reflects the previous file set.
 
 Add the canonical MIT text, Keep a Changelog beta entry, package homepage,
 bugs URL, focused keywords, and README beta quick start. Update both tarball
-file expectations to the actual minimal npm order.
+file expectations to the actual minimal npm order. Format and review the human
+documentation without adding tests that merely grep prose.
 
 - [ ] **Step 4: Run focused tests and package smoke verification**
 
 Run:
 
 ```sh
-pnpm exec vitest run tests/package.test.ts tests/release-metadata.test.ts
+pnpm exec vitest run tests/package.test.ts
 pnpm verify:package
 ```
 
@@ -88,8 +87,7 @@ version under exact Node.js 22.22.1.
 
 ```sh
 git add LICENSE CHANGELOG.md README.md package.json \
-  tests/package.test.ts tests/release-metadata.test.ts \
-  scripts/verify-package.mjs
+  tests/package.test.ts scripts/verify-package.mjs
 git commit -m "docs: add beta release metadata"
 ```
 
