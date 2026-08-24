@@ -332,6 +332,6 @@ Push `feat/git-hooks-module`, open a draft PR to `develop`, and include design, 
 
 Review module conflicts, script composition, Git worktree path handling, activation/restore ordering, symlink safety, hook shell quoting, exact Node inheritance, real offline commits, and stale documentation. Fix every Critical or Important finding through a failing test first.
 
-- [ ] **Step 4: Mark ready and merge**
+- [x] **Step 4: Mark ready and merge**
 
 After fresh full verification and approved independent review, mark the PR ready, merge it into `develop` with a merge commit, fast-forward local `develop`, and confirm the feature head is an ancestor of `origin/develop`.
