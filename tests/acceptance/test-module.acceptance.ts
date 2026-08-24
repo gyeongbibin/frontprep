@@ -30,13 +30,13 @@ async function applyTestModule(root: string): Promise<void> {
   }
 }
 
-async function node20Executable(): Promise<string> {
+async function minimumNodeExecutable(): Promise<string> {
   const { stdout } = await execFileAsync(
     'pnpm',
     [
       '--silent',
       'dlx',
-      '--package=node@20.9.0',
+      '--package=node@22.22.1',
       'node',
       '-p',
       'process.execPath',
@@ -47,7 +47,7 @@ async function node20Executable(): Promise<string> {
 }
 
 describe('Test module dependency compatibility', () => {
-  it('installs and runs the generated Vitest setup on Node.js 20.9.0', async () => {
+  it('installs and runs the generated Vitest setup on Node.js 22.22.1', async () => {
     const project = await createProject()
     try {
       const packagePath = join(project.root, 'package.json')
@@ -115,17 +115,17 @@ describe('Greeting', () => {
         valid: true,
       })
 
-      const node20 = await node20Executable()
+      const minimumNode = await minimumNodeExecutable()
       const { stdout: nodeVersion } = await execFileAsync(
-        node20,
+        minimumNode,
         ['--version'],
         { encoding: 'utf8' },
       )
-      expect(nodeVersion.trim()).toBe('v20.9.0')
+      expect(nodeVersion.trim()).toBe('v22.22.1')
 
-      const node20Environment = {
+      const minimumNodeEnvironment = {
         ...process.env,
-        PATH: `${dirname(node20)}${delimiter}${process.env.PATH ?? ''}`,
+        PATH: `${dirname(minimumNode)}${delimiter}${process.env.PATH ?? ''}`,
       }
       await execFileAsync(
         'pnpm',
@@ -133,14 +133,14 @@ describe('Greeting', () => {
         {
           cwd: project.root,
           encoding: 'utf8',
-          env: node20Environment,
+          env: minimumNodeEnvironment,
           maxBuffer: 10 * 1024 * 1024,
           timeout: 180_000,
         },
       )
 
       const { stdout } = await execFileAsync(
-        node20,
+        minimumNode,
         [
           join(project.root, 'node_modules/vitest/vitest.mjs'),
           'run',

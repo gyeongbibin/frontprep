@@ -226,7 +226,8 @@ as the feature modules land.
 ## Delivery and Package Acceptance
 
 The package is published as `@mingyeongbin/frontprep` with the `frontprep`
-binary. The core branch exposes `init` and `check`, but a supported project
+binary and declares Node.js `>=22.22.1`; the production bundle targets
+`node22`. The core branch exposes `init` and `check`, but a supported project
 cannot complete `init` until all five feature modules are registered by their
 design-first branches.
 
@@ -235,7 +236,8 @@ design before implementation and tests, opens as a draft PR, passes complete
 verification, becomes ready for review, and merges back into `develop` before
 the next module branch begins.
 
-`pnpm verify:package` builds a non-splitting ESM executable, creates the real
+`pnpm verify:package` runs under the exact minimum Node.js `v22.22.1`, builds a
+non-splitting ESM executable, creates the real
 npm tarball, checks its exact file list, installs it into an isolated npm
 prefix, verifies the public bin metadata, executable mode, and Node shebang,
 and smoke-tests help, version, unsupported-project, and core-only

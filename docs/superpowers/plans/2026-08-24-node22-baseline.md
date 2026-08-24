@@ -35,7 +35,7 @@
 - Consumes: package metadata read by `tests/package.test.ts` and tsup's `target` option.
 - Produces: `engines.node = ">=22.22.1"`, `@types/node = "^22.20.0"`, and a `node22` production bundle target.
 
-- [ ] **Step 1: Write the failing package metadata test**
+- [x] **Step 1: Write the failing package metadata test**
 
 Extend the local `PackageJson` projection and assertions:
 
@@ -53,14 +53,14 @@ expect(packageJson.engines.node).toBe('>=22.22.1')
 expect(packageJson.devDependencies['@types/node']).toBe('^22.20.0')
 ```
 
-- [ ] **Step 2: Run the focused test and confirm the old floor fails**
+- [x] **Step 2: Run the focused test and confirm the old floor fails**
 
 Run: `pnpm exec vitest run tests/package.test.ts`
 
 Expected: FAIL because the current metadata contains `>=20.9.0` and
 `^20.19.43`.
 
-- [ ] **Step 3: Update metadata, lockfile, and bundle target**
+- [x] **Step 3: Update metadata, lockfile, and bundle target**
 
 Change `package.json` to:
 
@@ -79,7 +79,7 @@ target: 'node22'
 
 Run `pnpm install` to update only the lockfile and installed Node types.
 
-- [ ] **Step 4: Run focused metadata and build verification**
+- [x] **Step 4: Run focused metadata and build verification**
 
 Run: `pnpm exec vitest run tests/package.test.ts && pnpm typecheck && pnpm build`
 
@@ -100,7 +100,7 @@ Expected: all commands exit `0`; tsup reports target `node22`.
 - Consumes: the existing `pnpm verify:test-compatibility` harness.
 - Produces: a real install and generated Vitest run under exactly Node.js `v22.22.1`.
 
-- [ ] **Step 1: Change only the acceptance assertion to the new floor**
+- [x] **Step 1: Change only the acceptance assertion to the new floor**
 
 Keep the bootstrap package unchanged and change:
 
@@ -108,28 +108,28 @@ Keep the bootstrap package unchanged and change:
 expect(nodeVersion.trim()).toBe('v22.22.1')
 ```
 
-- [ ] **Step 2: Run acceptance and confirm it still resolves Node 20**
+- [x] **Step 2: Run acceptance and confirm it still resolves Node 20**
 
 Run: `pnpm verify:test-compatibility`
 
 Expected: FAIL with received version `v20.9.0`, proving the assertion catches
 the old bootstrap runtime before the dependency installation runs.
 
-- [ ] **Step 3: Move the bootstrap helper to Node 22.22.1**
+- [x] **Step 3: Move the bootstrap helper to Node 22.22.1**
 
 Rename `node20Executable` to `minimumNodeExecutable`, request
 `node@22.22.1`, rename `node20` and `node20Environment` variables to
 `minimumNode` and `minimumNodeEnvironment`, and keep the PATH-prepend install
 mechanism unchanged.
 
-- [ ] **Step 4: Run the real compatibility fixture**
+- [x] **Step 4: Run the real compatibility fixture**
 
 Run: `pnpm verify:test-compatibility`
 
 Expected: one acceptance test passes after a real pnpm install and generated
 Vitest/RTL/jest-dom run under `v22.22.1`.
 
-- [ ] **Step 5: Correct Test module compatibility prose**
+- [x] **Step 5: Correct Test module compatibility prose**
 
 Replace Node 20 pinning rationale with: the existing Vite 6, React plugin 4,
 jsdom 26, and jest-dom ranges are the tested v1 set and all support the new
@@ -150,7 +150,7 @@ version text without changing generated dependency ranges.
 - Consumes: `scripts/verify-package.mjs` and the npm `node` binary package.
 - Produces: `pnpm verify:package` that executes the packed CLI smoke under Node.js 22.22.1.
 
-- [ ] **Step 1: Write the failing script-contract assertion**
+- [x] **Step 1: Write the failing script-contract assertion**
 
 Add this literal metadata assertion:
 
@@ -160,19 +160,19 @@ expect(packageJson.scripts['verify:package']).toBe(
 )
 ```
 
-- [ ] **Step 2: Run the focused test and confirm the old script fails**
+- [x] **Step 2: Run the focused test and confirm the old script fails**
 
 Run: `pnpm exec vitest run tests/package.test.ts`
 
 Expected: FAIL because `verify:package` still uses the ambient `node` binary.
 
-- [ ] **Step 3: Update the package script**
+- [x] **Step 3: Update the package script**
 
 Set the script to the exact string asserted above. Do not change
 `scripts/verify-package.mjs`; its spawned packed executable inherits the
 Node-22-first PATH supplied by pnpm dlx.
 
-- [ ] **Step 4: Run packaged acceptance**
+- [x] **Step 4: Run packaged acceptance**
 
 Run: `pnpm verify:package`
 
@@ -196,19 +196,19 @@ Expected: build succeeds and stdout contains `frontprep package verified`.
 - Consumes: the approved Node 22 baseline spec and verified commands from Tasks 1-3.
 - Produces: one non-contradictory v1 support statement across active docs.
 
-- [ ] **Step 1: Replace active Node 20.9 runtime statements**
+- [x] **Step 1: Replace active Node 20.9 runtime statements**
 
 Use `Node.js 22.22.1 or newer`, `Node.js 22.22.1+`, or `>=22.22.1` according
 to the surrounding prose or code shape. Update the CLI-core dependency plan to
 `@types/node@^22.20.0` and keep ESLint 10.
 
-- [ ] **Step 2: Rewrite compatibility rationale rather than blind replacement**
+- [x] **Step 2: Rewrite compatibility rationale rather than blind replacement**
 
 Remove claims that Test dependencies are pinned specifically to retain Node
 20.9. State that they remain the tested v1 compatibility set and satisfy Node
 22.22.1. Preserve links and generated config contracts.
 
-- [ ] **Step 3: Scan for stale runtime claims and format docs**
+- [x] **Step 3: Scan for stale runtime claims and format docs**
 
 Run:
 
@@ -233,7 +233,7 @@ Expected: the first command returns no active stale matches; Prettier exits
 - Consumes: the complete diff from `origin/develop` and both exact-floor acceptance commands.
 - Produces: a reviewed PR merged into `develop`, ready for Git Hooks rebase.
 
-- [ ] **Step 1: Run fresh verification**
+- [x] **Step 1: Run fresh verification**
 
 Run:
 
@@ -248,7 +248,7 @@ git status --short
 Expected: all checks pass, the exact-floor acceptances report success, and no
 uncommitted implementation files remain after commit.
 
-- [ ] **Step 2: Commit implementation**
+- [x] **Step 2: Commit implementation**
 
 ```bash
 git add README.md docs package.json pnpm-lock.yaml tsup.config.ts tests

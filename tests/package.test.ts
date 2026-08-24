@@ -9,6 +9,7 @@ const root = new URL('..', import.meta.url)
 
 interface PackageJson {
   bin: Record<string, string>
+  devDependencies: Record<string, string>
   engines: { node: string }
   files: string[]
   name: string
@@ -38,8 +39,12 @@ describe('package metadata', () => {
 
     expect(packageJson.name).toBe('@mingyeongbin/frontprep')
     expect(packageJson.bin).toEqual({ frontprep: 'dist/cli.js' })
-    expect(packageJson.engines.node).toBe('>=20.9.0')
+    expect(packageJson.engines.node).toBe('>=22.22.1')
+    expect(packageJson.devDependencies['@types/node']).toBe('^22.20.0')
     expect(packageJson.files).toEqual(['dist', 'schema'])
+    expect(packageJson.scripts['verify:package']).toBe(
+      'pnpm build && pnpm --silent dlx --package=node@22.22.1 node scripts/verify-package.mjs',
+    )
     expect(packageJson.scripts['verify:test-compatibility']).toBe(
       'vitest run --config tests/acceptance/vitest.config.ts',
     )

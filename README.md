@@ -6,7 +6,7 @@ consumer application.
 
 ## Version 1 support
 
-- Node.js 20.9 or newer
+- Node.js 22.22.1 or newer
 - Next.js 16 App Router with TypeScript 5
 - pnpm 10 declared in `packageManager`
 - one application at the Git repository root

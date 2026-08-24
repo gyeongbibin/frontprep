@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Node.js 20.9 or newer, Next.js 16 App Router, TypeScript 5, and pnpm 10.
+- Node.js 22.22.1 or newer, Next.js 16 App Router, TypeScript 5, and pnpm 10.
 - One Next.js application at the Git and package root, using exactly one of `app/` or `src/app/`.
 - Consumer JavaScript and TypeScript configuration is inspected as text and never imported or executed.
 - All paths are project-relative POSIX paths; symbolic links are rejected for managed targets and detected setup candidates.
@@ -333,7 +333,7 @@ plan, and `docs/modules/test.md`. Correct every Critical or Important finding
 through a new failing test before production changes.
 
 The review requested an automated real-install compatibility check at the
-Node.js 20.9 floor and explicit coverage for a symbolic-link `src` component.
+supported Node.js floor and explicit coverage for a symbolic-link `src` component.
 The follow-up adds `pnpm verify:test-compatibility`, a separately configured
 acceptance fixture, and the missing path-component regression case.
 
@@ -348,7 +348,7 @@ Run: `git diff --check origin/develop...HEAD && git status --short`
 Expected: no whitespace errors and no uncommitted implementation files.
 
 Observed after the review fixes: `pnpm check` passed 23 files and 234 tests;
-`pnpm verify:test-compatibility` passed its real-install Node.js 20.9.0
+`pnpm verify:test-compatibility` passed its real-install Node.js 22.22.1
 fixture; both diff checks completed without errors.
 
 - [ ] **Step 6: Mark ready and integrate through the agreed workflow**
