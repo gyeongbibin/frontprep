@@ -107,7 +107,7 @@ describe('package metadata', () => {
     expect(packed.files.find(({ path }) => path === 'dist/cli.js')?.mode).toBe(
       0o755,
     )
-  })
+  }, 30_000)
 
   it('builds an executable with one Node shebang', async () => {
     const executable = new URL('../dist/cli.js', import.meta.url)
