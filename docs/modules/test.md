@@ -17,26 +17,25 @@ this unit-test contract and should be covered by a later end-to-end workflow.
 
 Test contributes these development dependencies:
 
-| Package                     | Requested range   | Purpose                                       |
-| --------------------------- | ----------------- | --------------------------------------------- |
-| `@testing-library/dom`      | `^10.0.0`         | DOM queries required by React Testing Library |
-| `@testing-library/jest-dom` | `>=6.0.0 <6.10.0` | Vitest-compatible DOM matchers                |
-| `@testing-library/react`    | `^16.0.0`         | React component rendering and queries         |
-| `@vitejs/plugin-react`      | `^4.7.0`          | React JSX transformation on Vite 6            |
-| `jsdom`                     | `^26.0.0`         | Browser-like DOM on the Node.js 20 baseline   |
-| `vite`                      | `^6.0.0`          | Node.js 20-compatible transform pipeline      |
-| `vite-tsconfig-paths`       | `^6.0.0`          | TypeScript `baseUrl` and `paths` resolution   |
-| `vitest`                    | `^4.0.0`          | Unit-test runner                              |
+| Package                     | Requested range   | Purpose                                          |
+| --------------------------- | ----------------- | ------------------------------------------------ |
+| `@testing-library/dom`      | `^10.0.0`         | DOM queries required by React Testing Library    |
+| `@testing-library/jest-dom` | `>=6.0.0 <6.10.0` | Vitest-compatible DOM matchers                   |
+| `@testing-library/react`    | `^16.0.0`         | React component rendering and queries            |
+| `@vitejs/plugin-react`      | `^4.7.0`          | React JSX transformation on Vite 6               |
+| `jsdom`                     | `^26.0.0`         | Browser-like DOM for the tested v1 package set   |
+| `vite`                      | `^6.0.0`          | Transform pipeline for the tested v1 package set |
+| `vite-tsconfig-paths`       | `^6.0.0`          | TypeScript `baseUrl` and `paths` resolution      |
+| `vitest`                    | `^4.0.0`          | Unit-test runner                                 |
 
-These ranges deliberately retain Frontprep v1's Node.js 20.9 floor. A direct
-Vite 6 requirement prevents Vitest's broad Vite dependency range from
-selecting Vite 7 or 8, whose current Node.js floor is higher. React plugin 4,
-jsdom 26, and jest-dom below 6.10 likewise avoid raising the consumer runtime
-floor. The ranges are based on current package engine and peer metadata and
-are tested as one compatibility set by `pnpm verify:test-compatibility`. That
-acceptance check applies the real module plan to a temporary `src/app` project,
-runs a real pnpm install under Node.js 20.9.0, and executes the generated
-Vitest config with a React Testing Library render and jest-dom assertion.
+Vite 6, React plugin 4, jsdom 26, and jest-dom below 6.10 remain Frontprep
+v1's tested compatibility set; every declared range supports the Node.js
+22.22.1 floor. A direct Vite 6 requirement also prevents Vitest's broad Vite
+dependency range from selecting an unverified major. The ranges are tested as
+one compatibility set by `pnpm verify:test-compatibility`. That acceptance
+check applies the real module plan to a temporary `src/app` project, runs a
+real pnpm install under Node.js 22.22.1, and executes the generated Vitest
+config with a React Testing Library render and jest-dom assertion.
 
 An existing declaration may remain in either `dependencies` or
 `devDependencies` when its valid semver range intersects the requested range.
@@ -209,7 +208,7 @@ preserving a failing exit for real test failures.
 Repository acceptance verification is intentionally separate from the fast
 unit suite because it downloads the declared consumer dependency graph. Run
 `pnpm verify:test-compatibility` to resolve that graph with pnpm 10 and execute
-it using the exact supported Node.js floor, `v20.9.0`.
+it using the exact supported Node.js floor, `v22.22.1`.
 
 ## Test Matrix
 
@@ -238,4 +237,4 @@ Module tests cover:
   Test by default;
 - a separate real-install acceptance fixture that runs generated alias
   resolution, React rendering, cleanup setup, and jest-dom matchers on Node.js
-  20.9.0.
+  22.22.1.

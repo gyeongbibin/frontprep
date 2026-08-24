@@ -10,7 +10,7 @@ The CLI must not depend on a specific consumer repository. Consumer applications
 
 Frontprep v1 supports projects that satisfy all of these conditions:
 
-- Node.js 20.9 or newer.
+- Node.js 22.22.1 or newer.
 - Next.js 16 with the App Router.
 - TypeScript 5.
 - pnpm 10 declared through the `packageManager` field.
