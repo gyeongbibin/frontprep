@@ -49,8 +49,11 @@ describe('package metadata', () => {
     expect(packageJson.scripts['verify:package']).toBe(
       'pnpm build && pnpm --silent dlx --package=node@22.22.1 node scripts/verify-package.mjs',
     )
+    expect(packageJson.scripts['verify:quality-compatibility']).toBe(
+      'vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/quality-module.acceptance.ts',
+    )
     expect(packageJson.scripts['verify:test-compatibility']).toBe(
-      'vitest run --config tests/acceptance/vitest.config.ts',
+      'vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/test-module.acceptance.ts',
     )
   })
 

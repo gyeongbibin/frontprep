@@ -21,7 +21,8 @@
     "test:run": "vitest run",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test:run",
     "verify:package": "pnpm build && pnpm --silent dlx --package=node@22.22.1 node scripts/verify-package.mjs",
-    "verify:test-compatibility": "vitest run --config tests/acceptance/vitest.config.ts"
+    "verify:quality-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/quality-module.acceptance.ts",
+    "verify:test-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/test-module.acceptance.ts"
   },
   "engines": {
     "node": ">=22.22.1"

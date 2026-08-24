@@ -37,8 +37,8 @@ Fast tests pin both generated and repository dependency ranges. A separate
 `pnpm verify:quality-compatibility` acceptance fixture runs outside
 `pnpm check`: it applies the real Quality plan to a temporary `src/app`
 project, installs the declared graph under exact Node.js `v22.22.1`, and runs
-the generated `frontprep:lint:fix` and `frontprep:format:check` commands on a
-real TypeScript file.
+the generated `frontprep:lint:fix`, `frontprep:format`, and
+`frontprep:format:check` commands on a real TypeScript file.
 
 The fixture proves the failure that motivated this correction without making
 the networked consumer installation part of the fast repository suite.

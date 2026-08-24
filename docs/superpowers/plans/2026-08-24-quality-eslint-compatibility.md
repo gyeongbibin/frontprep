@@ -93,7 +93,7 @@ git commit -m "fix: use compatible ESLint major"
 - Consumes: the real Quality analysis/plan and exact Node bootstrap pattern from Test acceptance.
 - Produces `pnpm verify:quality-compatibility` selecting only the Quality fixture.
 
-- [ ] **Step 1: Write the failing package-script contract**
+- [x] **Step 1: Write the failing package-script contract**
 
 Assert:
 
@@ -103,13 +103,13 @@ expect(packageJson.scripts['verify:quality-compatibility']).toBe(
 )
 ```
 
-- [ ] **Step 2: Run package tests and confirm the script is missing**
+- [x] **Step 2: Run package tests and confirm the script is missing**
 
 Run: `pnpm exec vitest run tests/package.test.ts`
 
 Expected: FAIL because the script does not exist.
 
-- [ ] **Step 3: Add the focused acceptance command and fixture**
+- [x] **Step 3: Add the focused acceptance command and fixture**
 
 The fixture resolves `node@22.22.1`, applies the Quality plan to a temporary
 `src/app` project, installs with pnpm 10 and `--ignore-scripts`, writes
@@ -117,6 +117,7 @@ The fixture resolves `node@22.22.1`, applies the Quality plan to a temporary
 
 ```text
 pnpm run frontprep:lint:fix
+pnpm run frontprep:format
 pnpm run frontprep:format:check
 ```
 
@@ -124,13 +125,13 @@ using a PATH headed by the exact Node binary. Assert the source becomes
 `export const greeting = 'hello'` with no semicolon and the installed ESLint
 major is 9.
 
-- [ ] **Step 4: Run exact-floor Quality acceptance**
+- [x] **Step 4: Run exact-floor Quality acceptance**
 
 Run: `pnpm verify:quality-compatibility`
 
 Expected: one real-install fixture PASS under Node.js `v22.22.1`.
 
-- [ ] **Step 5: Commit acceptance coverage**
+- [x] **Step 5: Commit acceptance coverage**
 
 ```bash
 git add package.json tests/package.test.ts tests/acceptance/quality-module.acceptance.ts
