@@ -6,6 +6,7 @@ import { parse } from 'yaml'
 const workflowUrl = new URL('../.github/workflows/ci.yml', import.meta.url)
 
 interface WorkflowStep {
+  env?: { HUSKY: string }
   name: string
   run?: string
   uses?: string
@@ -14,7 +15,6 @@ interface WorkflowStep {
 
 interface RepositoryWorkflow {
   concurrency: { 'cancel-in-progress': boolean; group: string }
-  env: { HUSKY: string }
   jobs: {
     check: {
       name: string
@@ -48,7 +48,7 @@ describe('repository CI', () => {
       group:
         'ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}',
     })
-    expect(workflow?.env).toEqual({ HUSKY: '0' })
+    expect(workflow).not.toHaveProperty('env')
     expect(workflow?.on).toEqual({
       pull_request: { branches: ['develop', 'main'] },
       push: { branches: ['develop', 'main'] },
@@ -68,6 +68,11 @@ describe('repository CI', () => {
     ])
 
     const steps = workflow?.jobs.check.steps ?? []
+    expect(steps.find(({ name }) => name === 'Install dependencies')).toEqual({
+      env: { HUSKY: '0' },
+      name: 'Install dependencies',
+      run: 'pnpm install --frozen-lockfile',
+    })
     const actionSteps = steps.filter(
       (step): step is WorkflowStep & { uses: string } => Boolean(step.uses),
     )

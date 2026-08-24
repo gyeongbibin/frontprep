@@ -83,8 +83,8 @@ compatibility verification without claiming a stable release.
 Frontprep's own `.github/workflows/ci.yml` is distinct from the workflow the CI
 module generates for consumer projects. It runs on pushes and pull requests
 for `develop` and `main`, grants only `contents: read`, cancels stale runs for
-the same branch or pull request, disables Husky with `HUSKY=0`, and uses a
-20-minute timeout.
+the same branch or pull request, disables Husky only while repository
+dependencies are installed with `HUSKY=0`, and uses a 20-minute timeout.
 
 The job uses these reviewed immutable action references:
 

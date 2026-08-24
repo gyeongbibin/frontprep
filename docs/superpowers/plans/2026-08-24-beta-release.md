@@ -104,10 +104,10 @@ git commit -m "docs: add beta release metadata"
 
 Parse `.github/workflows/ci.yml` with `yaml`. Assert the `develop`/`main`
 push and pull-request triggers, `contents: read`, scoped concurrency,
-`HUSKY=0`, Ubuntu runner, 20-minute timeout, immutable action SHAs, disabled
-checkout credentials, exact Node.js 22.22.1, pnpm cache settings, frozen
-installation, and the six verification commands in exact order. Assert every
-action reference ends in a 40-character lowercase SHA.
+install-step-only `HUSKY=0`, Ubuntu runner, 20-minute timeout, immutable action
+SHAs, disabled checkout credentials, exact Node.js 22.22.1, pnpm cache
+settings, frozen installation, and the six verification commands in exact
+order. Assert every action reference ends in a 40-character lowercase SHA.
 
 - [ ] **Step 2: Confirm the workflow test fails because the file is absent**
 
