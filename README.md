@@ -4,6 +4,18 @@
 complete frontend tooling baseline. It is developed independently from any
 consumer application.
 
+The current release is `0.1.0-beta.0`. Install it in the project you want to
+configure, then run the local binary:
+
+```sh
+pnpm add --save-dev @mingyeongbin/frontprep@beta
+pnpm exec frontprep init --cwd .
+pnpm exec frontprep check --cwd .
+```
+
+The first `init` requires a clean Git worktree so every change can be reviewed
+or rolled back safely. Commit or stash existing work before running it.
+
 ## Version 1 support
 
 - Node.js 22.22.1 or newer
@@ -24,12 +36,11 @@ frontprep --help
 frontprep --version
 ```
 
-For an explicit project root:
+For an explicit project root from another directory:
 
-```text
-frontprep init --cwd <project>
-frontprep check --cwd <project>
-pnpm run frontprep:check
+```sh
+pnpm exec frontprep init --cwd <project>
+pnpm exec frontprep check --cwd <project>
 ```
 
 `init` requires a clean Git worktree on first use. It analyzes all registered
@@ -38,10 +49,23 @@ installation when dependencies change, verifies the project, and writes
 `.frontprep.json` last. `check` is read-only and validates the recorded setup
 before running the generated project check command.
 
+After initialization, the generated project-wide verification is also
+available directly:
+
+```sh
+pnpm run frontprep:check
+```
+
+Running `init` again is idempotent when the managed setup has not drifted.
+
 The production CLI registers the complete v1 module set in fixed order:
 Quality, Tailwind, Test, Git Hooks, and CI. Together they generate deterministic
 quality scripts, Tailwind foundations, Vitest, local commit hooks, the Next.js
 production build, and a least-privilege GitHub Actions workflow.
+
+Frontprep stops on user-owned configuration at its canonical paths instead of
+silently overwriting or merging it. Review the reported conflict and choose
+which configuration should own that concern.
 
 ## Development
 

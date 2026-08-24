@@ -2,6 +2,17 @@
   "name": "@mingyeongbin/frontprep",
   "version": "0.1.0-beta.0",
   "description": "An opinionated CLI for setting up frontend project tooling.",
+  "keywords": [
+    "frontend",
+    "nextjs",
+    "pnpm",
+    "setup",
+    "tooling"
+  ],
+  "homepage": "https://github.com/gyeongbibin/frontprep#readme",
+  "bugs": {
+    "url": "https://github.com/gyeongbibin/frontprep/issues"
+  },
   "type": "module",
   "bin": {
     "frontprep": "dist/cli.js"

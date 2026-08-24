@@ -220,8 +220,10 @@ Fixture tests initialize temporary Git repositories and commit their baseline be
 
 Package acceptance compiles and installs the executable, runs the public `bin`,
 and verifies help, version, unsupported-project, and uninitialized-project
-diagnostics. CI acceptance separately drives the built five-module behavior
-through a real Next.js application under Node.js 22.22.1.
+diagnostics. CI acceptance separately packs and installs the same public
+package, then drives that installed five-module CLI through a real Next.js
+application under Node.js 22.22.1. It never invokes the repository's
+`dist/cli.js` directly.
 
 ## Delivery and Package Acceptance
 
@@ -236,10 +238,16 @@ verification, becomes ready for review, and merges back into `develop` before
 the next module branch begins.
 
 `pnpm verify:package` runs under the exact minimum Node.js `v22.22.1`, builds a
-non-splitting ESM executable, creates the real
-npm tarball, checks its exact file list, installs it into an isolated npm
-prefix, verifies the public bin metadata, executable mode, and Node shebang,
-and smoke-tests help, version, unsupported-project, and core-only
-supported-project diagnostics through `node_modules/.bin/frontprep`.
+non-splitting ESM executable, creates the real npm tarball, checks its exact
+file list, installs it into an isolated npm prefix, verifies the public bin
+metadata, executable mode, and Node shebang, and smoke-tests help, version,
+unsupported-project, and core-only supported-project diagnostics through
+`node_modules/.bin/frontprep`.
+
+`pnpm verify:ci-compatibility` repeats the pack and isolated installation at
+the complete product boundary. It invokes the installed `dist/cli.js` for the
+five-module `init`, idempotent rerun, and `check`, while the generated project
+executes its real quality, test, and production-build pipeline.
+
 Consumer-specific repository paths are never part of the package or core
 tests.

@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process'
 import {
+  mkdtemp,
+  mkdir,
   readFile,
   readdir,
   readlink,
@@ -7,6 +9,7 @@ import {
   stat,
   writeFile,
 } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, posix, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -21,7 +24,6 @@ import { createProject } from '../helpers/project.js'
 
 const execFileAsync = promisify(execFile)
 const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
-const frontprepCli = join(repositoryRoot, 'dist/cli.js')
 const excludedDirectories = new Set(['.git', '.next', 'node_modules'])
 
 function isGeneratedIgnoredFile(name: string): boolean {
@@ -43,6 +45,73 @@ interface WorkflowDocument {
   }
   on: Record<string, { branches: string[] }>
   permissions: { contents: string }
+}
+
+interface InstalledCli {
+  cli: string
+  root: string
+}
+
+interface PackResult {
+  filename: string
+}
+
+async function installPackedCli(): Promise<InstalledCli> {
+  const root = await mkdtemp(join(tmpdir(), 'frontprep-ci-package-'))
+  try {
+    const packDirectory = join(root, 'pack')
+    const installDirectory = join(root, 'install')
+    const npmEnvironment = {
+      ...process.env,
+      npm_config_cache: join(root, 'npm-cache'),
+    }
+    await mkdir(packDirectory)
+    const { stdout } = await execFileAsync(
+      'npm',
+      ['pack', '--json', '--pack-destination', packDirectory],
+      {
+        cwd: repositoryRoot,
+        encoding: 'utf8',
+        env: npmEnvironment,
+      },
+    )
+    const [packed] = JSON.parse(stdout) as PackResult[]
+    if (packed === undefined || packed.filename.length === 0) {
+      throw new Error('npm pack did not return a tarball filename.')
+    }
+    await execFileAsync(
+      'npm',
+      [
+        'install',
+        '--ignore-scripts',
+        '--no-audit',
+        '--no-fund',
+        '--prefix',
+        installDirectory,
+        join(packDirectory, packed.filename),
+      ],
+      {
+        cwd: root,
+        encoding: 'utf8',
+        env: npmEnvironment,
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 120_000,
+      },
+    )
+    const cli = join(
+      installDirectory,
+      'node_modules',
+      '@mingyeongbin',
+      'frontprep',
+      'dist',
+      'cli.js',
+    )
+    await stat(cli)
+    return { cli, root }
+  } catch (error) {
+    await rm(root, { force: true, recursive: true })
+    throw error
+  }
 }
 
 async function minimumNodeExecutable(): Promise<string> {
@@ -190,8 +259,16 @@ async function snapshotProject(root: string): Promise<Map<string, string>> {
 
 describe('complete v1 compatibility', () => {
   it('runs the public five-module CLI and full check on Node.js 22.22.1', async () => {
-    const project = await createProject()
+    const installation = await installPackedCli()
+    const project = await createProject().catch(async (error: unknown) => {
+      await rm(installation.root, { force: true, recursive: true })
+      throw error
+    })
     try {
+      const frontprepCli = installation.cli
+      expect(frontprepCli).toContain(
+        join('node_modules', '@mingyeongbin', 'frontprep', 'dist', 'cli.js'),
+      )
       await writeFixture(project.root)
       const minimumNode = await minimumNodeExecutable()
       const { stdout: nodeVersion } = await execFileAsync(
@@ -290,7 +367,10 @@ describe('complete v1 compatibility', () => {
         (await stat(join(project.root, '.husky/pre-commit'))).mode & 0o777,
       ).toBe(0o755)
     } finally {
-      await rm(project.root, { force: true, recursive: true })
+      await Promise.all([
+        rm(project.root, { force: true, recursive: true }),
+        rm(installation.root, { force: true, recursive: true }),
+      ])
     }
   }, 900_000)
 })
