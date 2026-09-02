@@ -1,3 +1,5 @@
+import type { FileScope } from './scoped-paths.js'
+
 export const MODULE_ORDER = [
   'quality',
   'tailwind',
@@ -28,7 +30,7 @@ export interface ManifestFile {
   ownership: 'managed' | 'patched'
 }
 
-export interface FrontprepManifest {
+export interface FrontprepManifestV1 {
   $schema: string
   adapter: 'next-app'
   files: Record<string, ManifestFile>
@@ -41,6 +43,33 @@ export interface FrontprepManifest {
     stylesheet: string
   }
   schemaVersion: 1
+}
+
+export type FrontprepManifest = FrontprepManifestV1
+
+export type PathSelectionSource = 'default' | 'detected' | 'manifest' | 'option'
+
+export interface FrontprepManifestV2 {
+  $schema: 'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v2.json'
+  adapter: 'next-app'
+  files: Record<FileScope, Record<string, ManifestFile>>
+  frontprepVersion: string
+  managedScripts: Record<string, string>
+  modules: Record<ModuleId, string>
+  packageManager: string
+  paths: {
+    app: string
+    layout: string
+    stylesheet: string
+    utilities: string
+    test: string
+    testSetup: string
+  }
+  roots: {
+    package: string
+    workspace: '.'
+  }
+  schemaVersion: 2
 }
 
 export interface ProjectContext {
