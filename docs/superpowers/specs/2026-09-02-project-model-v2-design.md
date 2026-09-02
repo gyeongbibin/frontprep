@@ -160,18 +160,27 @@ TypeScript 5 dependencies.
 The resolved package-relative layout is immutable:
 
 ```ts
+type PathSelectionSource = 'default' | 'detected' | 'manifest' | 'option'
+
 interface ProjectLayout {
   readonly appDirectory: ProjectPath
   readonly layoutPath: ProjectPath
   readonly sourceDirectory: ProjectPath | null
-  readonly stylesheetPath: ProjectPath
-  readonly stylesheetImport: {
-    readonly kind: 'alias' | 'relative' | 'planned'
-    readonly specifier: string
+  readonly stylesheet: {
+    readonly path: ProjectPath
+    readonly source: PathSelectionSource
+    readonly importKind: 'alias' | 'relative' | 'planned'
+    readonly importSpecifier: string
   }
-  readonly testDirectory: ProjectPath
+  readonly utilities: {
+    readonly path: ProjectPath
+    readonly source: PathSelectionSource
+  }
+  readonly tests: {
+    readonly path: ProjectPath
+    readonly source: PathSelectionSource
+  }
   readonly testSetupPath: ProjectPath
-  readonly utilityDirectory: ProjectPath
 }
 ```
 
@@ -362,11 +371,11 @@ workspace project.
 
 ### Tailwind
 
-Tailwind consumes `layout.utilityDirectory` and
-`layout.stylesheetPath`. It removes utility candidate scanning and retains all
-existing managed-file, barrel-symbol, CSS conflict, Prettier composition, and
-symlink checks. New projects default to `shared/lib`; migrated v1 projects keep
-their existing directory.
+Tailwind consumes `layout.utilities.path` and `layout.stylesheet.path`. It
+removes utility candidate scanning and retains all existing managed-file,
+barrel-symbol, CSS conflict, Prettier composition, and symlink checks. New
+projects default to `shared/lib`; migrated v1 projects keep their existing
+directory.
 
 An aliased stylesheet import is considered connected when re-detection resolves
 it to the recorded stylesheet. Tailwind only adds a relative import when the
@@ -374,9 +383,9 @@ adapter reports `kind: planned`.
 
 ### Test
 
-Test consumes `layout.testDirectory` and `layout.testSetupPath` and removes its
-candidate scan. The generated Vitest config imports `configDefaults` and sets a
-deterministic include list:
+Test consumes `layout.tests.path` and `layout.testSetupPath` and removes its
+candidate scan. The generated Vitest config imports `configDefaults` and sets
+a deterministic include list:
 
 - `src/**/*.{test,spec}.?(c|m)[jt]s?(x)` for a `src/app` package;
 - `<app-directory>/**/*.{test,spec}.?(c|m)[jt]s?(x)` for a root `app` package;
