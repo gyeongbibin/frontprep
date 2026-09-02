@@ -90,4 +90,71 @@ describe('frontprep manifest', () => {
     ).toBe(false)
     expect(validate({ ...manifestV2(), unexpected: true })).toBe(false)
   })
+
+  it('loads a persisted v2 manifest with the matching schema', async () => {
+    const { loadPersistedManifest } = await import('../../src/core/manifest.js')
+    const root = await mkdtemp(join(tmpdir(), 'frontprep-manifest-'))
+    const persisted = manifestV2({ frontprepVersion: '0.1.0-beta.0' })
+    await writeFile(
+      join(root, MANIFEST_PATH),
+      `${JSON.stringify(persisted)}\n`,
+      'utf8',
+    )
+
+    await expect(loadPersistedManifest(root)).resolves.toEqual(persisted)
+  })
+
+  it('serializes v2 manifests with stable nested file ordering', async () => {
+    const { serializeManifestV2 } = await import('../../src/core/manifest.js')
+    const serialized = serializeManifestV2(
+      manifestV2({
+        files: {
+          package: {
+            'z.txt': {
+              hash: `sha256:${'c'.repeat(64)}`,
+              mode: '0644',
+              ownership: 'managed',
+            },
+            'a.txt': {
+              hash: `sha256:${'d'.repeat(64)}`,
+              mode: '0644',
+              ownership: 'managed',
+            },
+          },
+          repository: {
+            'z.txt': {
+              hash: `sha256:${'e'.repeat(64)}`,
+              mode: '0644',
+              ownership: 'managed',
+            },
+            'a.txt': {
+              hash: `sha256:${'f'.repeat(64)}`,
+              mode: '0644',
+              ownership: 'managed',
+            },
+          },
+        },
+      }),
+    )
+    const parsed = JSON.parse(serialized) as FrontprepManifestV2
+
+    expect(serialized.endsWith('\n')).toBe(true)
+    expect(Object.keys(parsed.files.package)).toEqual([
+      'a.txt',
+      'package.json',
+      'src/app/globals.css',
+      'z.txt',
+    ])
+    expect(Object.keys(parsed.files.repository)).toEqual(['a.txt', 'z.txt'])
+  })
+
+  it('refuses to write an invalid v2 manifest', async () => {
+    const { writeManifestV2 } = await import('../../src/core/manifest.js')
+    const root = await mkdtemp(join(tmpdir(), 'frontprep-manifest-'))
+    const invalid = manifestV2({ paths: { utilities: '../outside' } })
+
+    await expect(writeManifestV2(root, invalid)).rejects.toMatchObject({
+      code: 'INVALID_MANIFEST',
+    })
+  })
 })

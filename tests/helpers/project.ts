@@ -17,7 +17,7 @@ export interface ProjectOptions {
   typescriptVersion?: string | null
 }
 
-async function writeProjectFile(
+export async function writeProjectFile(
   root: string,
   path: string,
   contents: string,
