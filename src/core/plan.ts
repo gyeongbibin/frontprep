@@ -1,4 +1,5 @@
 import type { ProjectPath } from './paths.js'
+import type { FileScope } from './scoped-paths.js'
 import type { ModuleId } from './types.js'
 
 export interface FileOperation {
@@ -8,6 +9,7 @@ export interface FileOperation {
   moduleIds: readonly ModuleId[]
   ownership: 'managed' | 'patched'
   path: ProjectPath
+  scope: FileScope
 }
 
 export interface ChangePlan {

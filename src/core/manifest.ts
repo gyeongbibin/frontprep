@@ -28,8 +28,8 @@ function sortedRecord<T>(record: Record<string, T>): Record<string, T> {
   )
 }
 
-export function serializeManifest(manifest: FrontprepManifest): string {
-  const ordered: FrontprepManifest = {
+export function serializeManifestV1(manifest: FrontprepManifestV1): string {
+  const ordered: FrontprepManifestV1 = {
     $schema: manifest.$schema,
     schemaVersion: manifest.schemaVersion,
     frontprepVersion: manifest.frontprepVersion,
@@ -39,7 +39,7 @@ export function serializeManifest(manifest: FrontprepManifest): string {
       app: manifest.paths.app,
       stylesheet: manifest.paths.stylesheet,
     },
-    modules: sortedRecord(manifest.modules) as FrontprepManifest['modules'],
+    modules: sortedRecord(manifest.modules) as FrontprepManifestV1['modules'],
     files: sortedRecord(manifest.files),
     managedScripts: sortedRecord(manifest.managedScripts),
   }
@@ -75,6 +75,10 @@ export function serializeManifestV2(manifest: FrontprepManifestV2): string {
   return `${JSON.stringify(ordered, null, 2)}\n`
 }
 
+export function serializeManifest(manifest: FrontprepManifest): string {
+  return serializeManifestV2(manifest)
+}
+
 function invalidManifest(details: string, cause?: unknown): FrontprepError {
   return new FrontprepError(`Invalid .frontprep.json: ${details}`, {
     cause,
@@ -92,9 +96,9 @@ export async function loadManifest(
 ): Promise<FrontprepManifest | null> {
   const value = await loadPersistedManifest(root)
   if (value === null) return null
-  if (value.schemaVersion !== 1) {
+  if (value.schemaVersion !== 2) {
     throw invalidManifest(
-      'schema v2 cannot be used until the runtime manifest switch completes',
+      'schema v1 must be normalized before entering the v2 runtime',
     )
   }
   return value
@@ -163,9 +167,9 @@ export async function loadPersistedManifest(
   )
 }
 
-export async function writeManifest(
+export async function writeManifestV1(
   root: string,
-  manifest: FrontprepManifest,
+  manifest: FrontprepManifestV1,
 ): Promise<void> {
   if (!validateManifestV1(manifest)) {
     throw invalidManifest('refused to write data that does not match schema')
@@ -173,7 +177,7 @@ export async function writeManifest(
   const fileSystem = new FileSystem(root)
   await fileSystem.writeAtomic(
     toProjectPath(MANIFEST_PATH),
-    Buffer.from(serializeManifest(manifest)),
+    Buffer.from(serializeManifestV1(manifest)),
     0o644,
   )
 }
@@ -191,4 +195,11 @@ export async function writeManifestV2(
     Buffer.from(serializeManifestV2(manifest)),
     0o644,
   )
+}
+
+export async function writeManifest(
+  root: string,
+  manifest: FrontprepManifest,
+): Promise<void> {
+  await writeManifestV2(root, manifest)
 }

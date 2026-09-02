@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { FrontprepError } from '../../src/core/errors.js'
 import { Reporter, type OutputWriter } from '../../src/core/reporter.js'
 import { ProcessFailure } from '../../src/core/process.js'
+import { scopedProjectPath } from '../../src/core/scoped-paths.js'
 
 class BufferWriter implements OutputWriter {
   contents = ''
@@ -60,6 +61,20 @@ describe('Reporter', () => {
     reporter.modulePassed('test')
 
     expect(stdout.contents).toContain('\u001B[32m')
+  })
+
+  it('labels repository-scoped changed files', () => {
+    const stdout = new BufferWriter(false)
+    const reporter = new Reporter(stdout, new BufferWriter(false), {})
+
+    reporter.filesChanged([
+      scopedProjectPath('package.json'),
+      scopedProjectPath('.github/workflows/ci.yml', 'repository'),
+    ])
+
+    expect(stdout.contents).toBe(
+      '✓ Changed 2 files\n  package.json\n  [repository] .github/workflows/ci.yml\n',
+    )
   })
 
   it('prints typed recovery details and process diagnostics', () => {

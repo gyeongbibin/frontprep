@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 
@@ -11,30 +11,18 @@ import { serializeManifest, writeManifest } from '../../src/core/manifest.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import type { FrontprepManifest } from '../../src/core/types.js'
 import { createProject } from '../helpers/project.js'
+import { manifestV2 } from '../helpers/manifest.js'
 
 const execFileAsync = promisify(execFile)
 
 function manifestWithFiles(
-  files: FrontprepManifest['files'],
+  files: FrontprepManifest['files']['package'],
 ): FrontprepManifest {
-  return {
-    $schema:
-      'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json',
-    schemaVersion: 1,
+  return manifestV2({
     frontprepVersion: '0.1.0-beta.0',
-    adapter: 'next-app',
-    packageManager: 'pnpm@10.22.0',
-    paths: { app: 'src/app', stylesheet: 'src/app/globals.css' },
-    modules: {
-      quality: '1.0.0',
-      tailwind: '1.0.0',
-      test: '1.0.0',
-      'git-hooks': '1.0.0',
-      ci: '1.0.0',
-    },
-    files,
+    files: { package: files, repository: {} },
     managedScripts: {},
-  }
+  })
 }
 
 async function git(root: string, ...args: string[]): Promise<void> {
@@ -91,6 +79,39 @@ describe('Git guard', () => {
     await expect(
       assertSafeGitState(await detectProject(project.root)),
     ).rejects.toThrow('extra.txt')
+  })
+
+  it('authorizes one repository-scoped managed record and rejects duplicates', async () => {
+    const project = await createProject()
+    const workflowPath = '.github/workflows/ci.yml'
+    const workflowBytes = Buffer.from('name: CI\n')
+    await mkdir(join(project.root, '.github/workflows'), { recursive: true })
+    await writeFile(join(project.root, workflowPath), workflowBytes)
+    const base = await detectProject(project.root)
+    const record = {
+      hash: hashBytes(workflowBytes),
+      mode: '0644',
+      ownership: 'managed' as const,
+    }
+    const repositoryManifest = manifestV2({
+      frontprepVersion: '0.1.0-beta.0',
+      files: { package: {}, repository: { [workflowPath]: record } },
+    })
+
+    await expect(
+      assertSafeGitState({ ...base, manifest: repositoryManifest }),
+    ).resolves.toBeUndefined()
+
+    const duplicateManifest = manifestV2({
+      frontprepVersion: '0.1.0-beta.0',
+      files: {
+        package: { [workflowPath]: record },
+        repository: { [workflowPath]: record },
+      },
+    })
+    await expect(
+      assertSafeGitState({ ...base, manifest: duplicateManifest }),
+    ).rejects.toThrow('multiple manifest records')
   })
 
   it('rejects a semantically valid but non-canonical manifest', async () => {

@@ -1,5 +1,9 @@
 import type { CommandReporter } from '../../../src/commands/init.js'
 import type { ModuleId } from '../../../src/core/types.js'
+import {
+  displayScopedPath,
+  type ScopedProjectPath,
+} from '../../../src/core/scoped-paths.js'
 
 export class RecordingReporter implements CommandReporter {
   readonly events: string[] = []
@@ -9,8 +13,8 @@ export class RecordingReporter implements CommandReporter {
   detected(): void {
     this.events.push('detected')
   }
-  filesChanged(paths: readonly string[]): void {
-    this.events.push(`changed:${paths.join(',')}`)
+  filesChanged(paths: readonly ScopedProjectPath[]): void {
+    this.events.push(`changed:${paths.map(displayScopedPath).join(',')}`)
   }
   header(version: string): void {
     this.events.push(`header:${version}`)

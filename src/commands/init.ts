@@ -10,6 +10,7 @@ import type { ChangeIntent } from '../core/intents.js'
 import type { ChangePlan } from '../core/plan.js'
 import { detectProject } from '../core/project-detector.js'
 import { Reporter } from '../core/reporter.js'
+import type { ScopedProjectPath } from '../core/scoped-paths.js'
 import {
   applyPlan,
   type TransactionResult,
@@ -33,7 +34,7 @@ export interface InitOptions {
 export interface CommandReporter {
   alreadyApplied(): void
   detected(): void
-  filesChanged(paths: readonly string[]): void
+  filesChanged(paths: readonly ScopedProjectPath[]): void
   header(version: string): void
   modulePassed(id: ModuleId): void
   noFilesChanged(): void

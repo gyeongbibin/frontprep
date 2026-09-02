@@ -74,8 +74,6 @@ describe('manifest migration', () => {
       ['.github/workflows/ci.yml', 'pnpm-lock.yaml'],
     )
     expect(Object.keys(result.manifest?.files.package ?? {}).sort()).toEqual([
-      'package.json',
-      'src/app/globals.css',
       'src/shared/utils/cn.ts',
       'src/shared/utils/index.ts',
       'src/test/setup.ts',

@@ -1,5 +1,6 @@
 import { FrontprepError } from './errors.js'
 import { ProcessFailure } from './process.js'
+import { displayScopedPath, type ScopedProjectPath } from './scoped-paths.js'
 import type { ModuleId } from './types.js'
 
 export interface OutputWriter {
@@ -46,8 +47,11 @@ export class Reporter {
     this.status('No files changed')
   }
 
-  filesChanged(paths: readonly string[]): void {
+  filesChanged(paths: readonly ScopedProjectPath[]): void {
     this.status(`Changed ${paths.length} file${paths.length === 1 ? '' : 's'}`)
+    for (const path of paths) {
+      this.stdout.write(`  ${displayScopedPath(path)}\n`)
+    }
   }
 
   projectPassed(): void {

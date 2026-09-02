@@ -1,6 +1,11 @@
 import { FileSystem } from './filesystem.js'
 import { ProcessRunner } from './process.js'
-import { toProjectPath } from './paths.js'
+import {
+  displayScopedPath,
+  rootForScope,
+  scopedProjectPath,
+  type FileScope,
+} from './scoped-paths.js'
 import { MODULE_ORDER, type ProjectContext } from './types.js'
 import type {
   SetupModule,
@@ -82,27 +87,33 @@ export async function verifyStructure(
       })
     }
 
-    const fileSystem = new FileSystem(context.root)
-    for (const [path, recorded] of Object.entries(manifest.files).sort(
-      ([left], [right]) => left.localeCompare(right),
-    )) {
-      if (recorded.ownership !== 'managed') continue
-      try {
-        const snapshot = await fileSystem.snapshot(toProjectPath(path))
-        if (
-          snapshot.hash !== recorded.hash ||
-          modeString(snapshot.mode) !== recorded.mode
-        ) {
+    for (const scope of [
+      'package',
+      'repository',
+    ] as const satisfies readonly FileScope[]) {
+      const fileSystem = new FileSystem(rootForScope(context, scope))
+      for (const [path, recorded] of Object.entries(manifest.files[scope]).sort(
+        ([left], [right]) => left.localeCompare(right),
+      )) {
+        if (recorded.ownership !== 'managed') continue
+        const target = scopedProjectPath(path, scope)
+        try {
+          const snapshot = await fileSystem.snapshot(target.path)
+          if (
+            snapshot.hash !== recorded.hash ||
+            modeString(snapshot.mode) !== recorded.mode
+          ) {
+            issues.push({
+              message: 'Managed file fingerprint does not match.',
+              path: displayScopedPath(target),
+            })
+          }
+        } catch {
           issues.push({
             message: 'Managed file fingerprint does not match.',
-            path,
+            path: displayScopedPath(target),
           })
         }
-      } catch {
-        issues.push({
-          message: 'Managed file fingerprint does not match.',
-          path,
-        })
       }
     }
 

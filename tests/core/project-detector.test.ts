@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { writeManifest } from '../../src/core/manifest.js'
 import { detectProject } from '../../src/core/project-detector.js'
-import type { FrontprepManifest } from '../../src/core/types.js'
+import { manifestV2 } from '../helpers/manifest.js'
 import { createProject } from '../helpers/project.js'
 
 describe('project detector', () => {
@@ -67,24 +67,11 @@ describe('project detector', () => {
 
   it('loads a valid frontprep manifest into the context', async () => {
     const project = await createProject()
-    const manifest: FrontprepManifest = {
-      $schema:
-        'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json',
-      schemaVersion: 1,
+    const manifest = manifestV2({
       frontprepVersion: '0.1.0-beta.0',
-      adapter: 'next-app',
-      packageManager: 'pnpm@10.22.0',
-      paths: { app: 'src/app', stylesheet: 'src/app/globals.css' },
-      modules: {
-        quality: '1.0.0',
-        tailwind: '1.0.0',
-        test: '1.0.0',
-        'git-hooks': '1.0.0',
-        ci: '1.0.0',
-      },
-      files: {},
+      files: { package: {}, repository: {} },
       managedScripts: {},
-    }
+    })
     await writeManifest(project.root, manifest)
 
     await expect(detectProject(project.root)).resolves.toMatchObject({

@@ -7,20 +7,23 @@ import { describe, expect, it } from 'vitest'
 
 import {
   loadManifest,
+  loadPersistedManifest,
   MANIFEST_PATH,
   serializeManifest,
+  serializeManifestV1,
   writeManifest,
+  writeManifestV1,
 } from '../../src/core/manifest.js'
 import type {
-  FrontprepManifest,
+  FrontprepManifestV1,
   FrontprepManifestV2,
 } from '../../src/core/types.js'
 import { manifestV1, manifestV2 } from '../helpers/manifest.js'
 
 describe('frontprep manifest', () => {
   it('serializes keys deterministically with LF and a final newline', () => {
-    const serialized = serializeManifest(manifestV1())
-    const parsed = JSON.parse(serialized) as FrontprepManifest
+    const serialized = serializeManifestV1(manifestV1())
+    const parsed = JSON.parse(serialized) as FrontprepManifestV1
 
     expect(serialized.endsWith('\n')).toBe(true)
     expect(serialized).not.toContain('\r')
@@ -43,9 +46,9 @@ describe('frontprep manifest', () => {
 
   it('writes and loads a valid manifest', async () => {
     const root = await mkdtemp(join(tmpdir(), 'frontprep-manifest-'))
-    await writeManifest(root, manifestV1())
+    await writeManifestV1(root, manifestV1())
 
-    await expect(loadManifest(root)).resolves.toEqual(manifestV1())
+    await expect(loadPersistedManifest(root)).resolves.toEqual(manifestV1())
   })
 
   it('returns null when the manifest is absent', async () => {
@@ -92,7 +95,6 @@ describe('frontprep manifest', () => {
   })
 
   it('loads a persisted v2 manifest with the matching schema', async () => {
-    const { loadPersistedManifest } = await import('../../src/core/manifest.js')
     const root = await mkdtemp(join(tmpdir(), 'frontprep-manifest-'))
     const persisted = manifestV2({ frontprepVersion: '0.1.0-beta.0' })
     await writeFile(
@@ -105,8 +107,7 @@ describe('frontprep manifest', () => {
   })
 
   it('serializes v2 manifests with stable nested file ordering', async () => {
-    const { serializeManifestV2 } = await import('../../src/core/manifest.js')
-    const serialized = serializeManifestV2(
+    const serialized = serializeManifest(
       manifestV2({
         files: {
           package: {
@@ -139,21 +140,15 @@ describe('frontprep manifest', () => {
     const parsed = JSON.parse(serialized) as FrontprepManifestV2
 
     expect(serialized.endsWith('\n')).toBe(true)
-    expect(Object.keys(parsed.files.package)).toEqual([
-      'a.txt',
-      'package.json',
-      'src/app/globals.css',
-      'z.txt',
-    ])
+    expect(Object.keys(parsed.files.package)).toEqual(['a.txt', 'z.txt'])
     expect(Object.keys(parsed.files.repository)).toEqual(['a.txt', 'z.txt'])
   })
 
   it('refuses to write an invalid v2 manifest', async () => {
-    const { writeManifestV2 } = await import('../../src/core/manifest.js')
     const root = await mkdtemp(join(tmpdir(), 'frontprep-manifest-'))
     const invalid = manifestV2({ paths: { utilities: '../outside' } })
 
-    await expect(writeManifestV2(root, invalid)).rejects.toMatchObject({
+    await expect(writeManifest(root, invalid)).rejects.toMatchObject({
       code: 'INVALID_MANIFEST',
     })
   })

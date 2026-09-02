@@ -1,6 +1,6 @@
 import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
 
 import { FrontprepError } from './errors.js'
 import { FileSystem, type FileSnapshot } from './filesystem.js'
@@ -13,7 +13,13 @@ import { assertSafeGitState } from './git-guard.js'
 import { MANIFEST_PATH, writeManifest } from './manifest.js'
 import { PnpmPackageManager } from './package-manager.js'
 import type { ChangePlan } from './plan.js'
-import { toProjectPath, type ProjectPath } from './paths.js'
+import {
+  displayScopedPath,
+  rootForScope,
+  scopedPathKey,
+  scopedProjectPath,
+  type ScopedProjectPath,
+} from './scoped-paths.js'
 import {
   MODULE_ORDER,
   type FrontprepManifest,
@@ -22,8 +28,8 @@ import {
   type ProjectContext,
 } from './types.js'
 
-const LOCKFILE_PATH = toProjectPath('pnpm-lock.yaml')
-const FRONTPREP_MANIFEST_PATH = toProjectPath(MANIFEST_PATH)
+const LOCKFILE_TARGET = scopedProjectPath('pnpm-lock.yaml', 'repository')
+const FRONTPREP_MANIFEST_TARGET = scopedProjectPath(MANIFEST_PATH)
 
 export interface PackageManagerService {
   assertSupported(root: string, signal?: AbortSignal): Promise<void>
@@ -43,7 +49,7 @@ export interface TransactionServices {
 
 export interface TransactionResult {
   changed: boolean
-  changedFiles: readonly ProjectPath[]
+  changedFiles: readonly ScopedProjectPath[]
   manifest: FrontprepManifest | null
 }
 
@@ -52,14 +58,17 @@ interface BackupEntry {
   snapshot: FileSnapshot
 }
 
-function stalePlan(path: ProjectPath): FrontprepError {
-  return new FrontprepError(`Project file changed after planning: ${path}`, {
-    code: 'STALE_PLAN',
-    exitCode: 2,
-    path,
-    phase: 'application',
-    recovery: 'Review the concurrent change and run frontprep again.',
-  })
+function stalePlan(target: ScopedProjectPath): FrontprepError {
+  return new FrontprepError(
+    `Project file changed after planning: ${displayScopedPath(target)}`,
+    {
+      code: 'STALE_PLAN',
+      exitCode: 2,
+      path: displayScopedPath(target),
+      phase: 'application',
+      recovery: 'Review the concurrent change and run frontprep again.',
+    },
+  )
 }
 
 function rollbackFailure(
@@ -82,40 +91,50 @@ function modeString(mode: number): string {
   return `0${mode.toString(8).padStart(3, '0')}`
 }
 
-function uniqueTargets(plan: ChangePlan): readonly ProjectPath[] {
-  const paths = new Set<ProjectPath>(
-    plan.operations.map((operation) => operation.path),
+function uniqueTargets(plan: ChangePlan): readonly ScopedProjectPath[] {
+  const targets = new Map<string, ScopedProjectPath>()
+  for (const operation of plan.operations) {
+    const target = scopedProjectPath(operation.path, operation.scope)
+    targets.set(scopedPathKey(target), target)
+  }
+  targets.set(scopedPathKey(LOCKFILE_TARGET), LOCKFILE_TARGET)
+  targets.set(
+    scopedPathKey(FRONTPREP_MANIFEST_TARGET),
+    FRONTPREP_MANIFEST_TARGET,
   )
-  paths.add(LOCKFILE_PATH)
-  paths.add(FRONTPREP_MANIFEST_PATH)
-  return Object.freeze([...paths])
+  return Object.freeze([...targets.values()])
 }
 
 async function assertCurrentPlan(
-  fileSystem: FileSystem,
+  context: ProjectContext,
   plan: ChangePlan,
 ): Promise<void> {
   for (const operation of plan.operations) {
-    const current = await fileSystem.snapshot(operation.path)
+    const target = scopedProjectPath(operation.path, operation.scope)
+    const fileSystem = new FileSystem(rootForScope(context, target.scope))
+    const current = await fileSystem.snapshot(target.path)
     if (current.hash !== operation.beforeHash) {
-      throw stalePlan(operation.path)
+      throw stalePlan(target)
     }
   }
 }
 
 async function createBackup(
-  fileSystem: FileSystem,
-  paths: readonly ProjectPath[],
-): Promise<{ directory: string; entries: Map<ProjectPath, BackupEntry> }> {
+  context: ProjectContext,
+  targets: readonly ScopedProjectPath[],
+): Promise<{ directory: string; entries: Map<string, BackupEntry> }> {
   const directory = await mkdtemp(join(tmpdir(), 'frontprep-backup-'))
   await chmod(directory, 0o700)
-  const entries = new Map<ProjectPath, BackupEntry>()
+  const entries = new Map<string, BackupEntry>()
   try {
-    for (const path of paths) {
-      const snapshot = await fileSystem.snapshot(path)
-      const backupPath = snapshot.exists ? join(directory, path) : null
-      if (backupPath !== null) await fileSystem.copy(path, backupPath)
-      entries.set(path, { backupPath, snapshot })
+    for (const target of targets) {
+      const fileSystem = new FileSystem(rootForScope(context, target.scope))
+      const snapshot = await fileSystem.snapshot(target.path)
+      const backupPath = snapshot.exists
+        ? join(directory, target.scope, target.path)
+        : null
+      if (backupPath !== null) await fileSystem.copy(target.path, backupPath)
+      entries.set(scopedPathKey(target), { backupPath, snapshot })
     }
     return { directory, entries }
   } catch (error) {
@@ -125,20 +144,21 @@ async function createBackup(
 }
 
 async function restoreBackup(
-  fileSystem: FileSystem,
-  paths: readonly ProjectPath[],
-  entries: ReadonlyMap<ProjectPath, BackupEntry>,
-  createdDirectories: readonly ProjectPath[],
+  context: ProjectContext,
+  targets: readonly ScopedProjectPath[],
+  entries: ReadonlyMap<string, BackupEntry>,
+  createdDirectories: readonly ScopedProjectPath[],
 ): Promise<readonly unknown[]> {
   const failures: unknown[] = []
-  for (const path of [...paths].reverse()) {
+  for (const target of [...targets].reverse()) {
     try {
-      const entry = entries.get(path)!
+      const fileSystem = new FileSystem(rootForScope(context, target.scope))
+      const entry = entries.get(scopedPathKey(target))!
       if (!entry.snapshot.exists) {
-        await fileSystem.remove(path)
+        await fileSystem.remove(target.path)
       } else {
         await fileSystem.writeAtomic(
-          path,
+          target.path,
           await readFile(entry.backupPath!),
           entry.snapshot.mode!,
         )
@@ -147,9 +167,10 @@ async function restoreBackup(
       failures.push(error)
     }
   }
-  for (const path of createdDirectories) {
+  for (const target of createdDirectories) {
     try {
-      await fileSystem.removeDirectoryIfEmpty(path)
+      const fileSystem = new FileSystem(rootForScope(context, target.scope))
+      await fileSystem.removeDirectoryIfEmpty(target.path)
     } catch (error) {
       failures.push(error)
     }
@@ -158,39 +179,45 @@ async function restoreBackup(
 }
 
 async function missingTargetDirectories(
-  fileSystem: FileSystem,
+  context: ProjectContext,
   plan: ChangePlan,
-): Promise<readonly ProjectPath[]> {
-  const missing = new Set<ProjectPath>()
+): Promise<readonly ScopedProjectPath[]> {
+  const missing = new Map<string, ScopedProjectPath>()
   for (const operation of plan.operations) {
+    const fileSystem = new FileSystem(rootForScope(context, operation.scope))
     for (const path of await fileSystem.missingParentDirectories(
       operation.path,
     )) {
-      missing.add(path)
+      const target = scopedProjectPath(path, operation.scope)
+      missing.set(scopedPathKey(target), target)
     }
   }
   return Object.freeze(
-    [...missing].sort(
+    [...missing.values()].sort(
       (left, right) =>
-        right.split('/').length - left.split('/').length ||
-        right.localeCompare(left),
+        right.path.split('/').length - left.path.split('/').length ||
+        scopedPathKey(right).localeCompare(scopedPathKey(left)),
     ),
   )
 }
 
 async function fingerprint(
-  fileSystem: FileSystem,
-  path: ProjectPath,
+  context: ProjectContext,
+  target: ScopedProjectPath,
   ownership: ManifestFile['ownership'],
 ): Promise<ManifestFile> {
-  const snapshot = await fileSystem.snapshot(path)
+  const fileSystem = new FileSystem(rootForScope(context, target.scope))
+  const snapshot = await fileSystem.snapshot(target.path)
   if (!snapshot.exists || snapshot.hash === null || snapshot.mode === null) {
-    throw new FrontprepError(`Expected generated file is missing: ${path}`, {
-      code: 'GENERATED_FILE_MISSING',
-      exitCode: 1,
-      path,
-      phase: 'verification',
-    })
+    throw new FrontprepError(
+      `Expected generated file is missing: ${displayScopedPath(target)}`,
+      {
+        code: 'GENERATED_FILE_MISSING',
+        exitCode: 1,
+        path: displayScopedPath(target),
+        phase: 'verification',
+      },
+    )
   }
   return {
     hash: snapshot.hash,
@@ -211,17 +238,49 @@ function createManifest(
       services.moduleVersions[moduleId],
     ]),
   ) as Record<ModuleId, string>
+  const sourcePrefix = context.sourceDirectory === null ? '' : 'src/'
+  const packageFiles = files.package
+  const utilityCandidates = Object.entries(packageFiles)
+    .filter(([path, record]) => {
+      if (record.ownership !== 'managed' || !path.endsWith('/cn.ts')) {
+        return false
+      }
+      return packageFiles[`${posix.dirname(path)}/index.ts`] !== undefined
+    })
+    .map(([path]) => posix.dirname(path))
+  const setupCandidates = Object.entries(packageFiles)
+    .filter(
+      ([path, record]) =>
+        record.ownership === 'managed' && path.endsWith('/setup.ts'),
+    )
+    .map(([path]) => path)
+  const utilities =
+    context.manifest?.paths.utilities ??
+    (utilityCandidates.length === 1
+      ? utilityCandidates[0]!
+      : `${sourcePrefix}shared/utils`)
+  const testSetup =
+    context.manifest?.paths.testSetup ??
+    (setupCandidates.length === 1
+      ? setupCandidates[0]!
+      : `${sourcePrefix}test/setup.ts`)
+
   return {
     $schema:
-      'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json',
-    schemaVersion: 1,
+      'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v2.json',
+    schemaVersion: 2,
     frontprepVersion: services.frontprepVersion,
     adapter: context.adapter,
     packageManager: `${context.packageManager.name}@${context.packageManager.version}`,
     paths: {
       app: context.appDirectory,
+      layout: context.layoutPath,
       stylesheet: context.stylesheetPath,
+      utilities,
+      test: context.manifest?.paths.test ?? posix.dirname(testSetup),
+      testSetup,
     },
+    roots: { package: '.', workspace: '.' },
     modules,
     files,
     managedScripts,
@@ -241,14 +300,13 @@ export async function applyPlan(
     })
   }
 
-  const fileSystem = new FileSystem(context.root)
   await (services.assertGitState ?? assertSafeGitState)(context)
   services.signal?.throwIfAborted()
-  await assertCurrentPlan(fileSystem, plan)
-  const createdDirectories = await missingTargetDirectories(fileSystem, plan)
+  await assertCurrentPlan(context, plan)
+  const createdDirectories = await missingTargetDirectories(context, plan)
 
   const targets = uniqueTargets(plan)
-  const backup = await createBackup(fileSystem, targets)
+  const backup = await createBackup(context, targets)
   const packageManager = services.packageManager ?? new PnpmPackageManager()
   const gitHooks = services.gitHooks ?? new GitHooksManager()
   let gitHooksActivation: GitHooksActivation | null = null
@@ -256,6 +314,7 @@ export async function applyPlan(
   try {
     for (const operation of plan.operations) {
       services.signal?.throwIfAborted()
+      const fileSystem = new FileSystem(rootForScope(context, operation.scope))
       await fileSystem.writeAtomic(
         operation.path,
         operation.afterBytes,
@@ -277,25 +336,45 @@ export async function applyPlan(
     await services.verify(context.root, services.signal)
     services.signal?.throwIfAborted()
 
-    const changedFiles = plan.operations.map((operation) => operation.path)
-    const originalLock = backup.entries.get(LOCKFILE_PATH)!.snapshot
-    const currentLock = await fileSystem.snapshot(LOCKFILE_PATH)
-    if (currentLock.hash !== originalLock.hash) changedFiles.push(LOCKFILE_PATH)
+    const changedFiles = plan.operations.map((operation) =>
+      scopedProjectPath(operation.path, operation.scope),
+    )
+    const originalLock = backup.entries.get(
+      scopedPathKey(LOCKFILE_TARGET),
+    )!.snapshot
+    const lockFileSystem = new FileSystem(
+      rootForScope(context, LOCKFILE_TARGET.scope),
+    )
+    const currentLock = await lockFileSystem.snapshot(LOCKFILE_TARGET.path)
+    if (
+      currentLock.hash !== originalLock.hash &&
+      !changedFiles.some(
+        (target) => scopedPathKey(target) === scopedPathKey(LOCKFILE_TARGET),
+      )
+    ) {
+      changedFiles.push(LOCKFILE_TARGET)
+    }
 
     const files: FrontprepManifest['files'] = {
-      ...(context.manifest?.files ?? {}),
+      package: { ...(context.manifest?.files.package ?? {}) },
+      repository: { ...(context.manifest?.files.repository ?? {}) },
     }
     for (const operation of plan.operations) {
-      files[operation.path] = await fingerprint(
-        fileSystem,
-        operation.path,
+      const target = scopedProjectPath(operation.path, operation.scope)
+      files[target.scope][target.path] = await fingerprint(
+        context,
+        target,
         operation.ownership,
       )
     }
-    if (changedFiles.includes(LOCKFILE_PATH)) {
-      files[LOCKFILE_PATH] = await fingerprint(
-        fileSystem,
-        LOCKFILE_PATH,
+    if (
+      changedFiles.some(
+        (target) => scopedPathKey(target) === scopedPathKey(LOCKFILE_TARGET),
+      )
+    ) {
+      files.repository[LOCKFILE_TARGET.path] = await fingerprint(
+        context,
+        LOCKFILE_TARGET,
         'patched',
       )
     }
@@ -322,7 +401,7 @@ export async function applyPlan(
     }
     failures.push(
       ...(await restoreBackup(
-        fileSystem,
+        context,
         targets,
         backup.entries,
         createdDirectories,

@@ -10,6 +10,7 @@ import type {
 } from '../../src/core/git-hooks.js'
 import type { ChangePlan, FileOperation } from '../../src/core/plan.js'
 import { toProjectPath } from '../../src/core/paths.js'
+import type { FileScope } from '../../src/core/scoped-paths.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import {
   applyPlan,
@@ -36,7 +37,10 @@ function plan(
     managedScripts: {},
     operations,
     snapshot: Object.fromEntries(
-      operations.map(({ beforeHash, path }) => [path, beforeHash]),
+      operations.map(({ beforeHash, path, scope }) => [
+        `${scope}:${path}`,
+        beforeHash,
+      ]),
     ),
     summary: { quality: 0, tailwind: 0, test: 0, 'git-hooks': 0, ci: 0 },
   }
@@ -47,6 +51,7 @@ function operation(
   contents: string,
   beforeHash: string | null,
   mode = 0o644,
+  scope: FileScope = 'package',
 ): FileOperation {
   return {
     afterBytes: Buffer.from(contents),
@@ -55,6 +60,7 @@ function operation(
     moduleIds: ['quality'],
     ownership: 'managed',
     path: toProjectPath(path),
+    scope,
   }
 }
 
@@ -250,13 +256,16 @@ describe('applyPlan', () => {
     expect(packageManager.supportedChecks).toBe(1)
     expect(packageManager.installs).toBe(1)
     expect(manifestExistedDuringVerification).toBe(false)
-    expect(result.changedFiles).toEqual(['.editorconfig', 'pnpm-lock.yaml'])
-    expect(result.manifest?.files['.editorconfig']).toMatchObject({
+    expect(result.changedFiles).toEqual([
+      { path: '.editorconfig', scope: 'package' },
+      { path: 'pnpm-lock.yaml', scope: 'repository' },
+    ])
+    expect(result.manifest?.files.package['.editorconfig']).toMatchObject({
       hash: hashBytes(Buffer.from('root = true\n')),
       mode: '0644',
       ownership: 'managed',
     })
-    expect(result.manifest?.files['pnpm-lock.yaml']).toMatchObject({
+    expect(result.manifest?.files.repository['pnpm-lock.yaml']).toMatchObject({
       ownership: 'patched',
     })
     expect(

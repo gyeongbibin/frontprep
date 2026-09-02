@@ -73,11 +73,14 @@ export function manifestV1(
     ...overrides,
     paths: { ...defaults.paths, ...overrides.paths },
     modules: { ...defaults.modules, ...overrides.modules },
-    files: { ...defaults.files, ...overrides.files },
-    managedScripts: {
-      ...defaults.managedScripts,
-      ...overrides.managedScripts,
-    },
+    files:
+      overrides.files === undefined
+        ? { ...defaults.files }
+        : { ...overrides.files },
+    managedScripts:
+      overrides.managedScripts === undefined
+        ? { ...defaults.managedScripts }
+        : { ...overrides.managedScripts },
   }
 }
 
@@ -118,18 +121,18 @@ export function manifestV2(
     paths: { ...defaults.paths, ...overrides.paths },
     modules: { ...defaults.modules, ...overrides.modules },
     files: {
-      package: {
-        ...defaults.files.package,
-        ...overrides.files?.package,
-      },
-      repository: {
-        ...defaults.files.repository,
-        ...overrides.files?.repository,
-      },
+      package:
+        overrides.files?.package === undefined
+          ? { ...defaults.files.package }
+          : { ...overrides.files.package },
+      repository:
+        overrides.files?.repository === undefined
+          ? { ...defaults.files.repository }
+          : { ...overrides.files.repository },
     },
-    managedScripts: {
-      ...defaults.managedScripts,
-      ...overrides.managedScripts,
-    },
+    managedScripts:
+      overrides.managedScripts === undefined
+        ? { ...defaults.managedScripts }
+        : { ...overrides.managedScripts },
   }
 }

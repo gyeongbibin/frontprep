@@ -16,7 +16,13 @@ import type {
   ScriptIntent,
 } from './intents.js'
 import type { ChangePlan, FileOperation } from './plan.js'
-import { toProjectPath, type ProjectPath } from './paths.js'
+import {
+  manifestFile,
+  rootForScope,
+  scopedPathKey,
+  scopedProjectPath,
+  type ScopedProjectPath,
+} from './scoped-paths.js'
 import {
   MODULE_ORDER,
   type ModuleId,
@@ -24,8 +30,8 @@ import {
   type ProjectContext,
 } from './types.js'
 
-const PACKAGE_PATH = toProjectPath('package.json')
-const PRETTIER_PATH = toProjectPath('prettier.config.mjs')
+const PACKAGE_TARGET = scopedProjectPath('package.json')
+const PRETTIER_TARGET = scopedProjectPath('prettier.config.mjs')
 
 function serializePackageJson(packageJson: PackageJson): Buffer {
   return Buffer.from(`${JSON.stringify(packageJson, null, 2)}\n`)
@@ -185,13 +191,13 @@ function applyScripts(
 
 async function managedOperation(
   context: ProjectContext,
-  fileSystem: FileSystem,
-  path: ProjectPath,
+  target: ScopedProjectPath,
   contents: string,
   mode: number,
   intents: readonly ChangeIntent[],
 ): Promise<FileOperation | null> {
-  const snapshot = await fileSystem.snapshot(path)
+  const fileSystem = new FileSystem(rootForScope(context, target.scope))
+  const snapshot = await fileSystem.snapshot(target.path)
   const afterBytes = Buffer.from(contents)
   if (
     snapshot.hash === (await import('./filesystem.js')).hashBytes(afterBytes) &&
@@ -201,9 +207,12 @@ async function managedOperation(
   }
 
   if (snapshot.exists) {
-    const recorded = context.manifest?.files[path]
+    const recorded = manifestFile(context.manifest, target)
     if (recorded?.ownership !== 'managed' || recorded.hash !== snapshot.hash) {
-      throw new ConflictError(`User-modified managed file: ${path}`, path)
+      throw new ConflictError(
+        `User-modified managed file: ${target.path}`,
+        target.path,
+      )
     }
   }
 
@@ -213,7 +222,8 @@ async function managedOperation(
     mode,
     moduleIds: uniqueModuleIds(intents),
     ownership: 'managed' as const,
-    path,
+    path: target.path,
+    scope: target.scope,
   })
 }
 
@@ -222,7 +232,9 @@ export async function buildPlan(
   intents: readonly ChangeIntent[],
 ): Promise<ChangePlan> {
   assertCompatiblePathIntents(intents)
-  const fileSystem = new FileSystem(context.root)
+  const packageFileSystem = new FileSystem(
+    rootForScope(context, PACKAGE_TARGET.scope),
+  )
   const operations: FileOperation[] = []
   const dependencyIntents = intents.filter(
     (intent): intent is DependencyIntent => intent.kind === 'dependency',
@@ -234,7 +246,7 @@ export async function buildPlan(
   const packageJson = structuredClone(context.packageJson)
   const dependenciesChanged = applyDependencies(packageJson, dependencyIntents)
   const managedScripts = applyScripts(packageJson, scriptIntents, context)
-  const packageSnapshot = await fileSystem.snapshot(PACKAGE_PATH)
+  const packageSnapshot = await packageFileSystem.snapshot(PACKAGE_TARGET.path)
   const packageBytes = serializePackageJson(packageJson)
   const { hashBytes } = await import('./filesystem.js')
   if (packageSnapshot.hash !== hashBytes(packageBytes)) {
@@ -244,7 +256,8 @@ export async function buildPlan(
       mode: packageSnapshot.mode ?? 0o644,
       moduleIds: uniqueModuleIds([...dependencyIntents, ...scriptIntents]),
       ownership: 'patched',
-      path: PACKAGE_PATH,
+      path: PACKAGE_TARGET.path,
+      scope: PACKAGE_TARGET.scope,
     })
   }
 
@@ -255,8 +268,7 @@ export async function buildPlan(
   if (configFragments.length > 0) {
     const operation = await managedOperation(
       context,
-      fileSystem,
-      PRETTIER_PATH,
+      PRETTIER_TARGET,
       composePrettierConfig(configFragments),
       0o644,
       configFragments,
@@ -265,17 +277,22 @@ export async function buildPlan(
   }
 
   const completeByPath = new Map<
-    ProjectPath,
-    Array<ExecutableFileIntent | ManagedFileIntent>
+    string,
+    {
+      intents: Array<ExecutableFileIntent | ManagedFileIntent>
+      target: ScopedProjectPath
+    }
   >()
   for (const intent of intents) {
     if (intent.kind !== 'managed-file' && intent.kind !== 'executable-file')
       continue
-    const group = completeByPath.get(intent.path) ?? []
-    group.push(intent)
-    completeByPath.set(intent.path, group)
+    const target = scopedProjectPath(intent.path, intent.scope)
+    const key = scopedPathKey(target)
+    const entry = completeByPath.get(key) ?? { intents: [], target }
+    entry.intents.push(intent)
+    completeByPath.set(key, entry)
   }
-  for (const [path, group] of completeByPath) {
+  for (const { intents: group, target } of completeByPath.values()) {
     const contents = group[0]!.content
     const mode = group[0]!.kind === 'executable-file' ? 0o755 : group[0]!.mode
     if (
@@ -285,12 +302,14 @@ export async function buildPlan(
           (intent.kind === 'executable-file' ? 0o755 : intent.mode) !== mode,
       )
     ) {
-      throw new ConflictError(`Conflicting managed contents for ${path}.`, path)
+      throw new ConflictError(
+        `Conflicting managed contents for ${target.path}.`,
+        target.path,
+      )
     }
     const operation = await managedOperation(
       context,
-      fileSystem,
-      path,
+      target,
       contents,
       mode,
       group,
@@ -298,7 +317,10 @@ export async function buildPlan(
     if (operation !== null) operations.push(operation)
   }
 
-  const partialByPath = new Map<ProjectPath, ChangeIntent[]>()
+  const partialByPath = new Map<
+    string,
+    { intents: ChangeIntent[]; target: ScopedProjectPath }
+  >()
   for (const intent of intents) {
     if (
       intent.kind !== 'line-set' &&
@@ -307,12 +329,15 @@ export async function buildPlan(
     ) {
       continue
     }
-    const group = partialByPath.get(intent.path) ?? []
-    group.push(intent)
-    partialByPath.set(intent.path, group)
+    const target = scopedProjectPath(intent.path, intent.scope)
+    const key = scopedPathKey(target)
+    const entry = partialByPath.get(key) ?? { intents: [], target }
+    entry.intents.push(intent)
+    partialByPath.set(key, entry)
   }
-  for (const [path, group] of partialByPath) {
-    const snapshot = await fileSystem.snapshot(path)
+  for (const { intents: group, target } of partialByPath.values()) {
+    const fileSystem = new FileSystem(rootForScope(context, target.scope))
+    const snapshot = await fileSystem.snapshot(target.path)
     let contents = snapshot.bytes?.toString('utf8') ?? ''
     for (const intent of group) {
       if (intent.kind === 'line-set') {
@@ -331,12 +356,15 @@ export async function buildPlan(
         mode: snapshot.mode ?? 0o644,
         moduleIds: uniqueModuleIds(group),
         ownership: 'patched',
-        path,
+        path: target.path,
+        scope: target.scope,
       })
     }
   }
 
-  operations.sort((left, right) => left.path.localeCompare(right.path))
+  operations.sort((left, right) =>
+    scopedPathKey(left).localeCompare(scopedPathKey(right)),
+  )
   const summary = Object.fromEntries(
     MODULE_ORDER.map((id) => [id, 0]),
   ) as Record<ModuleId, number>
@@ -352,7 +380,10 @@ export async function buildPlan(
     ),
     snapshot: Object.freeze(
       Object.fromEntries(
-        operations.map(({ beforeHash, path }) => [path, beforeHash]),
+        operations.map((operation) => [
+          scopedPathKey(operation),
+          operation.beforeHash,
+        ]),
       ),
     ),
     summary: Object.freeze(summary),

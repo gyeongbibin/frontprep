@@ -304,7 +304,9 @@ describe('complete v1 compatibility', () => {
         tailwind: '1.0.0',
         test: '1.0.0',
       })
-      expect(manifest.files['.github/workflows/ci.yml']).toMatchObject({
+      expect(
+        manifest.files.repository['.github/workflows/ci.yml'],
+      ).toMatchObject({
         mode: '0644',
         ownership: 'managed',
       })

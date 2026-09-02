@@ -45,7 +45,7 @@ export interface FrontprepManifestV1 {
   schemaVersion: 1
 }
 
-export type FrontprepManifest = FrontprepManifestV1
+export type FrontprepManifest = FrontprepManifestV2
 
 export type PathSelectionSource = 'default' | 'detected' | 'manifest' | 'option'
 

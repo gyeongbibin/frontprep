@@ -21,6 +21,7 @@ const expectedFiles = [
   'dist/cli.js.map',
   'package.json',
   'schema/manifest-v1.json',
+  'schema/manifest-v2.json',
 ]
 
 function run(command, args, options = {}) {

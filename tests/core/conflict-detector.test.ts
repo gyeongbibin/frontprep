@@ -67,4 +67,25 @@ describe('conflict detector', () => {
       ]),
     ).toThrow('Conflicting complete and partial changes for .editorconfig')
   })
+
+  it('keeps equal relative paths independent across scopes', () => {
+    expect(() =>
+      assertCompatiblePathIntents([
+        managedFileIntent(
+          'quality',
+          'same.txt',
+          'package\n',
+          0o644,
+          'package file',
+        ),
+        lineSetIntent(
+          'ci',
+          'same.txt',
+          ['repository'],
+          'repository file',
+          'repository',
+        ),
+      ]),
+    ).not.toThrow()
+  })
 })

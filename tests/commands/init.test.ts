@@ -7,6 +7,11 @@ import type {
 } from '../../src/core/git-hooks.js'
 import type { ChangePlan } from '../../src/core/plan.js'
 import { detectProject } from '../../src/core/project-detector.js'
+import {
+  displayScopedPath,
+  scopedProjectPath,
+  type ScopedProjectPath,
+} from '../../src/core/scoped-paths.js'
 import type { TransactionResult } from '../../src/core/transaction.js'
 import type { ModuleId } from '../../src/core/types.js'
 import {
@@ -26,8 +31,8 @@ class RecordingReporter implements CommandReporter {
   detected(): void {
     this.events.push('detected')
   }
-  filesChanged(paths: readonly string[]): void {
-    this.events.push(`changed:${paths.join(',')}`)
+  filesChanged(paths: readonly ScopedProjectPath[]): void {
+    this.events.push(`changed:${paths.map(displayScopedPath).join(',')}`)
   }
   header(version: string): void {
     this.events.push(`header:${version}`)
@@ -118,7 +123,7 @@ describe('runInit', () => {
     let aggregateSize = 0
     const transaction: TransactionResult = {
       changed: true,
-      changedFiles: ['quality.txt' as never],
+      changedFiles: [scopedProjectPath('quality.txt')],
       manifest: null,
     }
     const services: CommandServices = {

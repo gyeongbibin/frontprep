@@ -17,6 +17,7 @@ import { composePrettierConfig } from '../core/composers/prettier.js'
 import { ConflictError } from '../core/errors.js'
 import { FileSystem, type FileSnapshot } from '../core/filesystem.js'
 import { toProjectPath } from '../core/paths.js'
+import { manifestFile, scopedProjectPath } from '../core/scoped-paths.js'
 import type { ProjectContext } from '../core/types.js'
 import type {
   SetupModule,
@@ -304,7 +305,7 @@ async function findConfigurationConflicts(
         continue
       }
 
-      const recorded = context.manifest?.files[path]
+      const recorded = manifestFile(context.manifest, scopedProjectPath(path))
       if (
         recorded?.ownership === 'managed' &&
         recorded.hash === snapshot.hash

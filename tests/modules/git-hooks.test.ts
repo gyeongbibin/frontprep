@@ -12,6 +12,7 @@ import { createModuleRegistry } from '../../src/modules/registry.js'
 import { qualityModule } from '../../src/modules/quality.js'
 import { tailwindModule } from '../../src/modules/tailwind.js'
 import { testModule } from '../../src/modules/test.js'
+import { manifestV2 } from '../helpers/manifest.js'
 import { createProject } from '../helpers/project.js'
 
 const EXPECTED_DEPENDENCIES = {
@@ -338,7 +339,6 @@ describe('git hooks module conflicts', () => {
     const project = await createProject()
     await applyGitHooksPlan(project.root)
     const manifestPath = join(project.root, '.frontprep.json')
-    const context = await detectProject(project.root)
     const fileSystem = new FileSystem(project.root)
     await writeFile(
       join(project.root, 'lint-staged.config.mjs'),
@@ -347,33 +347,20 @@ describe('git hooks module conflicts', () => {
     const snapshot = await fileSystem.snapshot(
       'lint-staged.config.mjs' as never,
     )
-    const manifest = {
-      $schema:
-        'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json',
-      schemaVersion: 1,
+    const manifest = manifestV2({
       frontprepVersion: '0.1.0-beta.0',
-      adapter: 'next-app',
-      packageManager: 'pnpm@10.22.0',
-      paths: {
-        app: context.appDirectory,
-        stylesheet: context.stylesheetPath,
-      },
-      modules: {
-        quality: '1.0.0',
-        tailwind: '1.0.0',
-        test: '1.0.0',
-        'git-hooks': '1.0.0',
-        ci: '1.0.0',
-      },
       files: {
-        'lint-staged.config.mjs': {
-          hash: snapshot.hash,
-          mode: '0644',
-          ownership: 'managed',
+        package: {
+          'lint-staged.config.mjs': {
+            hash: snapshot.hash!,
+            mode: '0644',
+            ownership: 'managed',
+          },
         },
+        repository: {},
       },
       managedScripts: {},
-    }
+    })
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
     await expect(
       gitHooksModule.analyze(await detectProject(project.root)),

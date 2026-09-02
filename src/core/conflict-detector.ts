@@ -1,6 +1,7 @@
 import { intersects, validRange } from 'semver'
 
 import { ConflictError } from './errors.js'
+import { scopedPathKey } from './scoped-paths.js'
 import type {
   ChangeIntent,
   DependencyIntent,
@@ -59,13 +60,17 @@ export function assertCompatiblePathIntents(
     if (!('path' in intent)) {
       continue
     }
-    const group = byPath.get(intent.path) ?? []
+    const key = scopedPathKey(intent)
+    const group = byPath.get(key) ?? []
     group.push(intent)
-    byPath.set(intent.path, group)
+    byPath.set(key, group)
   }
 
-  for (const [path, group] of byPath) {
+  for (const group of byPath.values()) {
     if (group.some(isCompleteIntent) && group.some(isPartialIntent)) {
+      const first = group[0]!
+      if (!('path' in first)) continue
+      const path = first.path
       throw new ConflictError(
         `Conflicting complete and partial changes for ${path}.`,
         path,
