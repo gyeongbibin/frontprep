@@ -1,6 +1,6 @@
 import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, posix } from 'node:path'
+import { join } from 'node:path'
 
 import { FrontprepError } from './errors.js'
 import { FileSystem, type FileSnapshot } from './filesystem.js'
@@ -45,6 +45,7 @@ export interface TransactionServices {
   packageManager?: PackageManagerService
   signal?: AbortSignal
   verify(root: string, signal?: AbortSignal): Promise<void>
+  writeManifestWhenUnchanged?: boolean
 }
 
 export interface TransactionResult {
@@ -238,31 +239,8 @@ function createManifest(
       services.moduleVersions[moduleId],
     ]),
   ) as Record<ModuleId, string>
-  const packageFiles = files.package
-  const utilityCandidates = Object.entries(packageFiles)
-    .filter(([path, record]) => {
-      if (record.ownership !== 'managed' || !path.endsWith('/cn.ts')) {
-        return false
-      }
-      return packageFiles[`${posix.dirname(path)}/index.ts`] !== undefined
-    })
-    .map(([path]) => posix.dirname(path))
-  const setupCandidates = Object.entries(packageFiles)
-    .filter(
-      ([path, record]) =>
-        record.ownership === 'managed' && path.endsWith('/setup.ts'),
-    )
-    .map(([path]) => path)
-  const utilities =
-    context.layout.utilities.path ??
-    (utilityCandidates.length === 1
-      ? utilityCandidates[0]!
-      : context.layout.utilities.path)
-  const testSetup =
-    context.layout.testSetupPath ??
-    (setupCandidates.length === 1
-      ? setupCandidates[0]!
-      : context.layout.testSetupPath)
+  const utilities = context.layout.utilities.path
+  const testSetup = context.layout.testSetupPath
 
   return {
     $schema:
@@ -276,7 +254,7 @@ function createManifest(
       layout: context.layoutPath,
       stylesheet: context.stylesheetPath,
       utilities,
-      test: context.layout.tests.path ?? posix.dirname(testSetup),
+      test: context.layout.tests.path,
       testSetup,
     },
     roots: { package: '.', workspace: '.' },
@@ -291,7 +269,10 @@ export async function applyPlan(
   plan: ChangePlan,
   services: TransactionServices,
 ): Promise<TransactionResult> {
-  if (plan.operations.length === 0) {
+  if (
+    plan.operations.length === 0 &&
+    services.writeManifestWhenUnchanged !== true
+  ) {
     return Object.freeze({
       changed: false,
       changedFiles: Object.freeze([]),
@@ -304,7 +285,10 @@ export async function applyPlan(
   await assertCurrentPlan(context, plan)
   const createdDirectories = await missingTargetDirectories(context, plan)
 
-  const targets = uniqueTargets(plan)
+  const targets =
+    plan.operations.length === 0
+      ? Object.freeze([FRONTPREP_MANIFEST_TARGET])
+      : uniqueTargets(plan)
   const backup = await createBackup(context, targets)
   const packageManager = services.packageManager ?? new PnpmPackageManager()
   const gitHooks = services.gitHooks ?? new GitHooksManager()
@@ -338,20 +322,22 @@ export async function applyPlan(
     const changedFiles = plan.operations.map((operation) =>
       scopedProjectPath(operation.path, operation.scope),
     )
-    const originalLock = backup.entries.get(
-      scopedPathKey(LOCKFILE_TARGET),
-    )!.snapshot
-    const lockFileSystem = new FileSystem(
-      rootForScope(context, LOCKFILE_TARGET.scope),
-    )
-    const currentLock = await lockFileSystem.snapshot(LOCKFILE_TARGET.path)
-    if (
-      currentLock.hash !== originalLock.hash &&
-      !changedFiles.some(
-        (target) => scopedPathKey(target) === scopedPathKey(LOCKFILE_TARGET),
+    if (plan.operations.length > 0) {
+      const originalLock = backup.entries.get(
+        scopedPathKey(LOCKFILE_TARGET),
+      )!.snapshot
+      const lockFileSystem = new FileSystem(
+        rootForScope(context, LOCKFILE_TARGET.scope),
       )
-    ) {
-      changedFiles.push(LOCKFILE_TARGET)
+      const currentLock = await lockFileSystem.snapshot(LOCKFILE_TARGET.path)
+      if (
+        currentLock.hash !== originalLock.hash &&
+        !changedFiles.some(
+          (target) => scopedPathKey(target) === scopedPathKey(LOCKFILE_TARGET),
+        )
+      ) {
+        changedFiles.push(LOCKFILE_TARGET)
+      }
     }
 
     const files: FrontprepManifest['files'] = {
@@ -384,8 +370,18 @@ export async function applyPlan(
     })
     await writeManifest(context.root, manifest)
 
+    const originalManifest = backup.entries.get(
+      scopedPathKey(FRONTPREP_MANIFEST_TARGET),
+    )!.snapshot
+    const currentManifest = await new FileSystem(context.root).snapshot(
+      FRONTPREP_MANIFEST_TARGET.path,
+    )
+    if (currentManifest.hash !== originalManifest.hash) {
+      changedFiles.push(FRONTPREP_MANIFEST_TARGET)
+    }
+
     return Object.freeze({
-      changed: true,
+      changed: changedFiles.length > 0,
       changedFiles: Object.freeze(changedFiles),
       manifest: Object.freeze(manifest),
     })

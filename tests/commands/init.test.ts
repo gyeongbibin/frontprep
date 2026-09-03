@@ -230,6 +230,39 @@ describe('runInit', () => {
     ])
   })
 
+  it('uses the transaction for a manifest migration with an empty module plan', async () => {
+    const project = await createProject()
+    const detected = await detectProject(project.root)
+    const context = Object.freeze({
+      ...detected,
+      manifestNeedsMigration: true,
+    })
+    let writeManifestWhenUnchanged = false
+    const services: CommandServices = {
+      ...createCommandServices(new RecordingReporter(), []),
+      applyPlan: async (_context, _plan, transactionServices) => {
+        writeManifestWhenUnchanged =
+          transactionServices.writeManifestWhenUnchanged === true
+        return {
+          changed: true,
+          changedFiles: [scopedProjectPath('.frontprep.json')],
+          manifest: context.manifest,
+        }
+      },
+      assertSafeGitState: async () => undefined,
+      buildPlan: async () => EMPTY_PLAN,
+      detectProject: async () => context,
+      runProjectCheck: async () => undefined,
+      verifyModules: async () => ({ issues: [], valid: true }),
+      verifyStructure: async () => ({ issues: [], valid: true }),
+    }
+
+    const result = await runInit({ cwd: project.root }, services)
+
+    expect(writeManifestWhenUnchanged).toBe(true)
+    expect(result.changedFiles).toEqual([scopedProjectPath('.frontprep.json')])
+  })
+
   it('restores empty-plan Git Hooks activation when verification fails', async () => {
     const project = await createProject()
     const context = await detectProject(project.root)

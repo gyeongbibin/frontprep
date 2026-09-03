@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { hashBytes } from '../../src/core/filesystem.js'
+import { writeManifest } from '../../src/core/manifest.js'
 import type {
   GitHooksActivation,
   GitHooksService,
@@ -19,6 +20,7 @@ import {
 } from '../../src/core/transaction.js'
 import type { ModuleId } from '../../src/core/types.js'
 import { createProject } from '../helpers/project.js'
+import { manifestV2 } from '../helpers/manifest.js'
 
 const MODULE_VERSIONS: Readonly<Record<ModuleId, string>> = {
   quality: '1.0.0',
@@ -230,6 +232,42 @@ describe('applyPlan', () => {
     ).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it('writes a changed manifest transactionally for an unchanged plan', async () => {
+    const project = await createProject()
+    await writeManifest(project.root, manifestV2({ frontprepVersion: '0.0.9' }))
+    const context = await detectProject(project.root)
+    const packageManager = new TestPackageManager()
+    const result = await applyPlan(context, plan([]), {
+      ...services(packageManager),
+      writeManifestWhenUnchanged: true,
+    })
+
+    expect(result.changed).toBe(true)
+    expect(result.changedFiles).toEqual([
+      { path: '.frontprep.json', scope: 'package' },
+    ])
+    expect(packageManager.installs).toBe(0)
+  })
+
+  it('restores the original manifest when migration verification fails', async () => {
+    const project = await createProject()
+    await writeManifest(project.root, manifestV2({ frontprepVersion: '0.0.9' }))
+    const original = await readFile(join(project.root, '.frontprep.json'))
+    const context = await detectProject(project.root)
+
+    await expect(
+      applyPlan(context, plan([]), {
+        ...services(new TestPackageManager(), async () => {
+          throw new Error('migration verification failed')
+        }),
+        writeManifestWhenUnchanged: true,
+      }),
+    ).rejects.toThrow('migration verification failed')
+    expect(await readFile(join(project.root, '.frontprep.json'))).toEqual(
+      original,
+    )
+  })
+
   it('installs once, verifies written files, and writes the manifest last', async () => {
     const project = await createProject()
     const context = await detectProject(project.root)
@@ -259,6 +297,7 @@ describe('applyPlan', () => {
     expect(result.changedFiles).toEqual([
       { path: '.editorconfig', scope: 'package' },
       { path: 'pnpm-lock.yaml', scope: 'repository' },
+      { path: '.frontprep.json', scope: 'package' },
     ])
     expect(result.manifest?.files.package['.editorconfig']).toMatchObject({
       hash: hashBytes(Buffer.from('root = true\n')),

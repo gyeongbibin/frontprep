@@ -28,6 +28,7 @@ describe('Reporter', () => {
 
     reporter.header('0.1.0-beta.0')
     reporter.detected(context)
+    reporter.migrationAvailable()
     reporter.modulePassed('quality')
     reporter.alreadyApplied()
     reporter.noFilesChanged()
@@ -41,6 +42,7 @@ describe('Reporter', () => {
         '  Stylesheet: src/app/globals.css [detected, relative: ./globals.css]',
         '  Utilities: src/shared/lib [default]',
         '  Tests: src/test [default]',
+        '✓ Manifest schema v2 migration is available; run frontprep init',
         '✓ quality',
         '✓ All modules are already applied',
         '✓ No files changed',

@@ -41,6 +41,7 @@ export interface CommandReporter {
   filesChanged(paths: readonly ScopedProjectPath[]): void
   header(version: string): void
   modulePassed(id: ModuleId): void
+  migrationAvailable?(): void
   noFilesChanged(): void
   projectPassed(): void
 }
@@ -188,7 +189,7 @@ export async function runInit(
   const plan = await services.buildPlan(context, intents)
 
   let transaction: TransactionResult
-  if (plan.operations.length === 0) {
+  if (plan.operations.length === 0 && !context.manifestNeedsMigration) {
     await verifyEmptyPlan(context, services, options.signal)
     transaction = {
       changed: false,
@@ -202,6 +203,7 @@ export async function runInit(
       gitHooks: services.gitHooks,
       moduleVersions: moduleVersions(services.modules),
       signal: options.signal,
+      writeManifestWhenUnchanged: context.manifestNeedsMigration,
       verify: async (root, signal) => {
         const refreshed = await services.detectProject(root, detectionOptions)
         assertValid(await services.verifyModules(refreshed, services.modules))

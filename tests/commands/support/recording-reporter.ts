@@ -22,6 +22,9 @@ export class RecordingReporter implements CommandReporter {
   modulePassed(id: ModuleId): void {
     this.events.push(`module:${id}`)
   }
+  migrationAvailable(): void {
+    this.events.push('migration-available')
+  }
   noFilesChanged(): void {
     this.events.push('no-files')
   }

@@ -50,6 +50,10 @@ export class Reporter {
     this.status(moduleId)
   }
 
+  migrationAvailable(): void {
+    this.status('Manifest schema v2 migration is available; run frontprep init')
+  }
+
   alreadyApplied(): void {
     this.status('All modules are already applied')
   }

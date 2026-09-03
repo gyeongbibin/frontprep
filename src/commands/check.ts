@@ -28,6 +28,9 @@ export async function runCheck(
   const context = await services.detectProject(options.cwd)
   await services.assertSafeGitState(context)
   services.reporter.detected(context)
+  if (context.manifestNeedsMigration) {
+    services.reporter.migrationAvailable?.()
+  }
 
   const verification = await services.verifyStructure(context, services.modules)
   if (!verification.valid) {
