@@ -27,7 +27,7 @@ export async function runCheck(
   services.reporter.header(services.frontprepVersion)
   const context = await services.detectProject(options.cwd)
   await services.assertSafeGitState(context)
-  services.reporter.detected()
+  services.reporter.detected(context)
 
   const verification = await services.verifyStructure(context, services.modules)
   if (!verification.valid) {

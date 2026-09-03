@@ -238,7 +238,6 @@ function createManifest(
       services.moduleVersions[moduleId],
     ]),
   ) as Record<ModuleId, string>
-  const sourcePrefix = context.sourceDirectory === null ? '' : 'src/'
   const packageFiles = files.package
   const utilityCandidates = Object.entries(packageFiles)
     .filter(([path, record]) => {
@@ -255,15 +254,15 @@ function createManifest(
     )
     .map(([path]) => path)
   const utilities =
-    context.manifest?.paths.utilities ??
+    context.layout.utilities.path ??
     (utilityCandidates.length === 1
       ? utilityCandidates[0]!
-      : `${sourcePrefix}shared/utils`)
+      : context.layout.utilities.path)
   const testSetup =
-    context.manifest?.paths.testSetup ??
+    context.layout.testSetupPath ??
     (setupCandidates.length === 1
       ? setupCandidates[0]!
-      : `${sourcePrefix}test/setup.ts`)
+      : context.layout.testSetupPath)
 
   return {
     $schema:
@@ -277,7 +276,7 @@ function createManifest(
       layout: context.layoutPath,
       stylesheet: context.stylesheetPath,
       utilities,
-      test: context.manifest?.paths.test ?? posix.dirname(testSetup),
+      test: context.layout.tests.path ?? posix.dirname(testSetup),
       testSetup,
     },
     roots: { package: '.', workspace: '.' },

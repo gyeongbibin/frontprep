@@ -1,7 +1,7 @@
 import { FrontprepError } from './errors.js'
 import { ProcessFailure } from './process.js'
 import { displayScopedPath, type ScopedProjectPath } from './scoped-paths.js'
-import type { ModuleId } from './types.js'
+import type { ModuleId, ProjectContext } from './types.js'
 
 export interface OutputWriter {
   readonly isTTY?: boolean
@@ -31,8 +31,19 @@ export class Reporter {
     this.stdout.write(`frontprep ${version}\n`)
   }
 
-  detected(): void {
+  detected(context: ProjectContext): void {
     this.status('Detected Next.js App Router with pnpm')
+    const { layout } = context
+    this.stdout.write(`  App: ${layout.appDirectory} (${layout.layoutPath})\n`)
+    this.stdout.write(
+      `  Stylesheet: ${layout.stylesheet.path} [${layout.stylesheet.source}, ${layout.stylesheet.importKind}: ${layout.stylesheet.importSpecifier}]\n`,
+    )
+    this.stdout.write(
+      `  Utilities: ${layout.utilities.path} [${layout.utilities.source}]\n`,
+    )
+    this.stdout.write(
+      `  Tests: ${layout.tests.path} [${layout.tests.source}]\n`,
+    )
   }
 
   modulePassed(moduleId: ModuleId): void {
@@ -60,7 +71,7 @@ export class Reporter {
 
   error(error: unknown): void {
     if (error instanceof FrontprepError) {
-      this.stderr.write(`[${error.phase}] ${error.message}\n`)
+      this.stderr.write(`[${error.phase}:${error.code}] ${error.message}\n`)
       if (error.moduleId !== undefined) {
         this.stderr.write(`Module: ${error.moduleId}\n`)
       }

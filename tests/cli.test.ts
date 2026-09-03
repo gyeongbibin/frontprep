@@ -50,6 +50,47 @@ describe('frontprep CLI', () => {
     expect(output.stdoutText).toContain('check')
   })
 
+  it('forwards init layout options to project detection', async () => {
+    const project = await createProject({ layout: 'export default null\n' })
+    const context = await detectProject(project.root)
+    let received: unknown
+    const services = {
+      ...createCommandServices(SILENT_REPORTER, []),
+      assertSafeGitState: async () => undefined,
+      detectProject: async (_cwd: string, options?: unknown) => {
+        received = options
+        return context
+      },
+      runProjectCheck: async () => undefined,
+      verifyStructure: async () => ({ issues: [], valid: true }),
+    }
+
+    await expect(
+      runCli(
+        [
+          'node',
+          'frontprep',
+          'init',
+          '--cwd',
+          project.root,
+          '--stylesheet',
+          'src/styles/global.css',
+          '--utility-dir',
+          'src/shared/lib',
+          '--test-dir',
+          'src/spec',
+        ],
+        services,
+        io(),
+      ),
+    ).resolves.toBe(0)
+    expect(received).toEqual({
+      stylesheet: 'src/styles/global.css',
+      testDirectory: 'src/spec',
+      utilityDirectory: 'src/shared/lib',
+    })
+  })
+
   it('prints the package version', async () => {
     const output = io()
 
@@ -145,7 +186,7 @@ describe('frontprep CLI', () => {
       expect(source.listenerCount('SIGINT')).toBe(0)
       expect(source.listenerCount('SIGTERM')).toBe(0)
       expect(output.stderrText).toContain(
-        '[application] Frontprep was interrupted.',
+        '[application:INTERRUPTED] Frontprep was interrupted.',
       )
       expect(output.stderrText).not.toContain('Unexpected failure')
     },

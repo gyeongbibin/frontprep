@@ -16,7 +16,11 @@ import {
   type TransactionResult,
   type TransactionServices,
 } from '../core/transaction.js'
-import type { ModuleId, ProjectContext } from '../core/types.js'
+import type {
+  ModuleId,
+  ProjectContext,
+  ProjectDetectionOptions,
+} from '../core/types.js'
 import {
   runProjectCheck,
   verifyModules,
@@ -26,14 +30,14 @@ import { createModuleRegistry, DEFAULT_MODULES } from '../modules/registry.js'
 import type { SetupModule, VerificationResult } from '../modules/types.js'
 import { FRONTPREP_VERSION } from '../version.js'
 
-export interface InitOptions {
+export interface InitOptions extends ProjectDetectionOptions {
   cwd: string
   signal?: AbortSignal
 }
 
 export interface CommandReporter {
   alreadyApplied(): void
-  detected(): void
+  detected(context: ProjectContext): void
   filesChanged(paths: readonly ScopedProjectPath[]): void
   header(version: string): void
   modulePassed(id: ModuleId): void
@@ -52,7 +56,10 @@ export interface CommandServices {
     context: ProjectContext,
     intents: readonly ChangeIntent[],
   ): Promise<ChangePlan>
-  detectProject(cwd: string): Promise<ProjectContext>
+  detectProject(
+    cwd: string,
+    options?: ProjectDetectionOptions,
+  ): Promise<ProjectContext>
   frontprepVersion: string
   gitHooks: GitHooksService
   modules: readonly SetupModule[]
@@ -158,9 +165,20 @@ export async function runInit(
   services: CommandServices = createCommandServices(),
 ): Promise<TransactionResult> {
   services.reporter.header(services.frontprepVersion)
-  const context = await services.detectProject(options.cwd)
+  const detectionOptions: ProjectDetectionOptions = {
+    ...(options.stylesheet === undefined
+      ? {}
+      : { stylesheet: options.stylesheet }),
+    ...(options.testDirectory === undefined
+      ? {}
+      : { testDirectory: options.testDirectory }),
+    ...(options.utilityDirectory === undefined
+      ? {}
+      : { utilityDirectory: options.utilityDirectory }),
+  }
+  const context = await services.detectProject(options.cwd, detectionOptions)
   await services.assertSafeGitState(context)
-  services.reporter.detected()
+  services.reporter.detected(context)
 
   const intents: ChangeIntent[] = []
   for (const setupModule of services.modules) {
@@ -185,7 +203,7 @@ export async function runInit(
       moduleVersions: moduleVersions(services.modules),
       signal: options.signal,
       verify: async (root, signal) => {
-        const refreshed = await services.detectProject(root)
+        const refreshed = await services.detectProject(root, detectionOptions)
         assertValid(await services.verifyModules(refreshed, services.modules))
         await services.runProjectCheck(root, signal)
       },

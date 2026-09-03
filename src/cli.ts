@@ -67,9 +67,35 @@ export function createCli(
     .command('init')
     .description('Apply every registered frontprep module.')
     .option('--cwd <path>', 'project root', process.cwd())
-    .action(async ({ cwd }: { cwd: string }) => {
-      await runInit({ cwd, signal }, services)
-    })
+    .option('--stylesheet <path>', 'global stylesheet path')
+    .option('--utility-dir <path>', 'shared utility directory')
+    .option('--test-dir <path>', 'test setup directory')
+    .action(
+      async ({
+        cwd,
+        stylesheet,
+        testDir,
+        utilityDir,
+      }: {
+        cwd: string
+        stylesheet?: string
+        testDir?: string
+        utilityDir?: string
+      }) => {
+        await runInit(
+          {
+            cwd,
+            signal,
+            ...(stylesheet === undefined ? {} : { stylesheet }),
+            ...(testDir === undefined ? {} : { testDirectory: testDir }),
+            ...(utilityDir === undefined
+              ? {}
+              : { utilityDirectory: utilityDir }),
+          },
+          services,
+        )
+      },
+    )
 
   program
     .command('check')

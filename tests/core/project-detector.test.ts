@@ -14,12 +14,39 @@ describe('project detector', () => {
     expect(context).toMatchObject({
       adapter: 'next-app',
       appDirectory: 'src/app',
+      layout: {
+        tests: { path: 'src/test', source: 'default' },
+        utilities: { path: 'src/shared/lib', source: 'default' },
+      },
       manifest: null,
+      manifestNeedsMigration: false,
+      packageRoot: context.root,
       packageManager: { name: 'pnpm', version: '10.22.0' },
+      repositoryRoot: context.root,
       sourceDirectory: 'src',
       stylesheetPath: 'src/app/globals.css',
+      workspaceRoot: context.root,
     })
     expect(Object.isFrozen(context)).toBe(true)
+    expect(Object.isFrozen(context.layout)).toBe(true)
+    expect(Object.isFrozen(context.layout.stylesheet)).toBe(true)
+  })
+
+  it('selects explicit utility and test directories', async () => {
+    const project = await createProject()
+
+    await expect(
+      detectProject(project.root, {
+        testDirectory: 'src/spec',
+        utilityDirectory: 'src/shared/lib',
+      }),
+    ).resolves.toMatchObject({
+      layout: {
+        tests: { path: 'src/spec', source: 'option' },
+        testSetupPath: 'src/spec/setup.ts',
+        utilities: { path: 'src/shared/lib', source: 'option' },
+      },
+    })
   })
 
   it.each([
@@ -76,7 +103,23 @@ describe('project detector', () => {
 
     await expect(detectProject(project.root)).resolves.toMatchObject({
       manifest,
+      layout: {
+        tests: { path: manifest.paths.test, source: 'manifest' },
+        utilities: { path: manifest.paths.utilities, source: 'manifest' },
+      },
     })
+  })
+
+  it('rejects an option that disagrees with the manifest path', async () => {
+    const project = await createProject()
+    await writeManifest(
+      project.root,
+      manifestV2({ frontprepVersion: '0.1.0-beta.0' }),
+    )
+
+    await expect(
+      detectProject(project.root, { utilityDirectory: 'src/lib' }),
+    ).rejects.toThrow('--utility-dir')
   })
 
   it('rejects pnpm workspace package globs', async () => {

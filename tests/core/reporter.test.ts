@@ -4,6 +4,8 @@ import { FrontprepError } from '../../src/core/errors.js'
 import { Reporter, type OutputWriter } from '../../src/core/reporter.js'
 import { ProcessFailure } from '../../src/core/process.js'
 import { scopedProjectPath } from '../../src/core/scoped-paths.js'
+import { detectProject } from '../../src/core/project-detector.js'
+import { createProject } from '../helpers/project.js'
 
 class BufferWriter implements OutputWriter {
   contents = ''
@@ -17,13 +19,15 @@ class BufferWriter implements OutputWriter {
 }
 
 describe('Reporter', () => {
-  it('prints deterministic non-TTY status without ANSI escapes', () => {
+  it('prints deterministic non-TTY status without ANSI escapes', async () => {
     const stdout = new BufferWriter(false)
     const stderr = new BufferWriter(false)
     const reporter = new Reporter(stdout, stderr, {})
+    const project = await createProject()
+    const context = await detectProject(project.root)
 
     reporter.header('0.1.0-beta.0')
-    reporter.detected()
+    reporter.detected(context)
     reporter.modulePassed('quality')
     reporter.alreadyApplied()
     reporter.noFilesChanged()
@@ -33,6 +37,10 @@ describe('Reporter', () => {
       [
         'frontprep 0.1.0-beta.0',
         '✓ Detected Next.js App Router with pnpm',
+        '  App: src/app (src/app/layout.tsx)',
+        '  Stylesheet: src/app/globals.css [detected, relative: ./globals.css]',
+        '  Utilities: src/shared/lib [default]',
+        '  Tests: src/test [default]',
         '✓ quality',
         '✓ All modules are already applied',
         '✓ No files changed',
@@ -97,7 +105,7 @@ describe('Reporter', () => {
     reporter.error(typed)
     reporter.error(processFailure)
 
-    expect(stderr.contents).toContain('[git] unsafe state')
+    expect(stderr.contents).toContain('[git:UNSAFE_GIT_STATE] unsafe state')
     expect(stderr.contents).toContain('Path: package.json')
     expect(stderr.contents).toContain('Recovery: Commit changes.')
     expect(stderr.contents).toContain('install failed')

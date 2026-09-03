@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
-import { readFile, realpath } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, readFile, realpath } from 'node:fs/promises'
+import { join, posix } from 'node:path'
 import { promisify } from 'node:util'
 
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
@@ -10,8 +10,15 @@ import { parse as parseYaml } from 'yaml'
 import { detectNextApp } from '../adapters/next-app.js'
 import { freezeProjectContext } from './context.js'
 import { UnsupportedProjectError } from './errors.js'
-import { loadManifest } from './manifest.js'
-import type { PackageJson, ProjectContext } from './types.js'
+import { loadPersistedManifest } from './manifest.js'
+import { normalizeManifest } from './manifest-migration.js'
+import { toProjectPath, type ProjectPath } from './paths.js'
+import type {
+  PackageJson,
+  PathSelectionSource,
+  ProjectContext,
+  ProjectDetectionOptions,
+} from './types.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -90,7 +97,78 @@ async function assertSinglePackageWorkspace(root: string): Promise<void> {
   }
 }
 
-export async function detectProject(cwd: string): Promise<ProjectContext> {
+function selectedPath(
+  option: string | undefined,
+  manifest: string | undefined,
+  fallback: string,
+  flag: '--test-dir' | '--utility-dir',
+): { path: ProjectPath; source: PathSelectionSource } {
+  let optionPath: ProjectPath | undefined
+  let manifestPath: ProjectPath | undefined
+  try {
+    optionPath = option === undefined ? undefined : toProjectPath(option)
+    manifestPath = manifest === undefined ? undefined : toProjectPath(manifest)
+  } catch (error) {
+    throw new UnsupportedProjectError(
+      `${flag} and manifest paths must be safe project-relative POSIX paths.`,
+      `Provide a valid ${flag} value or repair .frontprep.json.`,
+      error,
+    )
+  }
+  if (
+    optionPath !== undefined &&
+    manifestPath !== undefined &&
+    optionPath !== manifestPath
+  ) {
+    throw new UnsupportedProjectError(
+      `${flag} selects ${optionPath}, but .frontprep.json selects ${manifestPath}.`,
+      'Use the manifest path or remove the stale manifest before overriding it.',
+    )
+  }
+  return {
+    path: optionPath ?? manifestPath ?? toProjectPath(fallback),
+    source:
+      optionPath !== undefined
+        ? 'option'
+        : manifestPath !== undefined
+          ? 'manifest'
+          : 'default',
+  }
+}
+
+async function assertDirectoryOrMissing(
+  root: string,
+  path: ProjectPath,
+  flag: '--test-dir' | '--utility-dir',
+): Promise<void> {
+  let current = root
+  for (const segment of path.split('/')) {
+    current = join(current, segment)
+    try {
+      const metadata = await lstat(current)
+      if (metadata.isSymbolicLink()) {
+        throw new UnsupportedProjectError(
+          `${flag} contains a symbolic link: ${path}.`,
+          `Choose a real directory with ${flag}.`,
+        )
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw error
+    }
+  }
+  if (!(await lstat(join(root, path))).isDirectory()) {
+    throw new UnsupportedProjectError(
+      `${flag} must be a real directory or a missing directory: ${path}.`,
+      `Choose a valid directory with ${flag}.`,
+    )
+  }
+}
+
+export async function detectProject(
+  cwd: string,
+  options: ProjectDetectionOptions = {},
+): Promise<ProjectContext> {
   let root: string
   try {
     root = await realpath(cwd)
@@ -169,15 +247,75 @@ export async function detectProject(cwd: string): Promise<ProjectContext> {
   }
   await assertSinglePackageWorkspace(root)
 
-  const app = await detectNextApp(root)
-  const manifest = await loadManifest(root)
+  const persisted = await loadPersistedManifest(root)
+  const app = await detectNextApp(root, {
+    manifestStylesheet: persisted?.paths.stylesheet,
+    stylesheet: options.stylesheet,
+  })
+  const normalized = await normalizeManifest(root, persisted, {
+    app: app.appDirectory,
+    layout: app.layoutPath,
+    stylesheet: app.stylesheetPath,
+  })
+  const manifest = normalized.manifest
+  if (
+    manifest !== null &&
+    (manifest.paths.app !== app.appDirectory ||
+      manifest.paths.layout !== app.layoutPath)
+  ) {
+    throw new UnsupportedProjectError(
+      'The App Router root does not match .frontprep.json.',
+      'Restore the recorded layout or remove the stale manifest before continuing.',
+    )
+  }
+
+  const sourcePrefix = app.sourceDirectory === null ? '' : 'src/'
+  const utilities = selectedPath(
+    options.utilityDirectory,
+    manifest?.paths.utilities,
+    `${sourcePrefix}shared/lib`,
+    '--utility-dir',
+  )
+  const tests = selectedPath(
+    options.testDirectory,
+    manifest?.paths.test,
+    `${sourcePrefix}test`,
+    '--test-dir',
+  )
+  await assertDirectoryOrMissing(root, utilities.path, '--utility-dir')
+  await assertDirectoryOrMissing(root, tests.path, '--test-dir')
+
+  const testSetupPath =
+    tests.source === 'manifest'
+      ? toProjectPath(manifest!.paths.testSetup)
+      : toProjectPath(posix.join(tests.path, 'setup.ts'))
+  if (posix.dirname(testSetupPath) !== tests.path) {
+    throw new UnsupportedProjectError(
+      '.frontprep.json testSetup must be inside the selected test directory.',
+      'Repair or remove the stale manifest before continuing.',
+    )
+  }
+  const layout = {
+    appDirectory: app.appDirectory,
+    layoutPath: app.layoutPath,
+    sourceDirectory: app.sourceDirectory,
+    stylesheet: app.stylesheet,
+    utilities,
+    tests,
+    testSetupPath,
+  }
   return freezeProjectContext({
     ...app,
     adapter: 'next-app',
+    layout,
     manifest,
+    manifestNeedsMigration: normalized.needsMigration,
     packageJson,
     packageJsonPath,
     packageManager: { name: 'pnpm', version: packageManagerMatch[1] },
+    packageRoot: root,
+    repositoryRoot: root,
     root,
+    workspaceRoot: root,
   })
 }
