@@ -309,7 +309,7 @@ export async function applyPlan(
       await packageManager.assertSupported(context.root, services.signal)
       await packageManager.install(context.root, services.signal)
     }
-    if (services.activateGitHooks === true) {
+    if (services.activateGitHooks === true && plan.operations.length > 0) {
       gitHooksActivation = await gitHooks.activate(
         context.root,
         services.signal,

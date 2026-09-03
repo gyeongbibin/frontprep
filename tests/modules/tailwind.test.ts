@@ -299,11 +299,7 @@ describe('tailwind module', () => {
     const project = await createProject({ appDirectory: 'app' })
     await rename(join(project.root, 'app'), join(project.root, 'app-target'))
     await symlink('app-target', join(project.root, 'app'))
-    const context = await detectProject(project.root)
-
-    await expect(tailwindModule.analyze(context)).rejects.toThrow(
-      'Root layout path contains a symbolic link: app.',
-    )
+    await expect(detectProject(project.root)).rejects.toThrow('symbolic link')
   })
 
   it('rejects a stylesheet reached through an ancestor symbolic link', async () => {
@@ -318,11 +314,7 @@ describe('tailwind module', () => {
       join(project.root, 'src/app/layout.tsx'),
       "import '../styles/theme.css'\n\nexport default function Layout() { return null }\n",
     )
-    const context = await detectProject(project.root)
-
-    await expect(tailwindModule.analyze(context)).rejects.toThrow(
-      'Stylesheet path contains a symbolic link: src/styles.',
-    )
+    await expect(detectProject(project.root)).rejects.toThrow('symbolic link')
   })
 
   it.each(['src/domain/ui/lib', 'src/lib/utils', 'src/utils'])(

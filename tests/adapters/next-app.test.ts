@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, rename, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -91,6 +91,17 @@ describe('Next App Router adapter', () => {
     await expect(
       detectNextApp(project.root, { stylesheet: 'src/styles/global.css' }),
     ).rejects.toThrow('--stylesheet')
+  })
+
+  it('rejects an imported stylesheet through an internal symbolic link', async () => {
+    const project = await createProject()
+    await rename(
+      join(project.root, 'src/app/globals.css'),
+      join(project.root, 'src/app/actual.css'),
+    )
+    await symlink('actual.css', join(project.root, 'src/app/globals.css'))
+
+    await expect(detectNextApp(project.root)).rejects.toThrow('symbolic link')
   })
 
   it('rejects multiple local CSS imports', async () => {

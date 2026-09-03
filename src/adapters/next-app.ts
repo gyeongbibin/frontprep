@@ -60,13 +60,20 @@ async function assertSafeRegularOrMissing(
   flag: string,
 ): Promise<void> {
   let current = root
-  for (const segment of path.split('/')) {
+  const segments = path.split('/')
+  for (const [index, segment] of segments.entries()) {
     current = join(current, segment)
     try {
       const metadata = await lstat(current)
       if (metadata.isSymbolicLink()) {
         throw new UnsupportedProjectError(
           `Configured stylesheet contains a symbolic link: ${path}.`,
+          `Choose a regular project file with ${flag}.`,
+        )
+      }
+      if (index < segments.length - 1 && !metadata.isDirectory()) {
+        throw new UnsupportedProjectError(
+          `Configured stylesheet has a non-directory path component: ${path}.`,
           `Choose a regular project file with ${flag}.`,
         )
       }
@@ -97,6 +104,7 @@ async function resolveRelativeStylesheet(
   const candidate = resolve(root, dirname(layoutPath), clean)
   const path = projectPath(toPosixPath(relative(root, candidate)))
   const resolved = await resolveProjectPath(root, path)
+  await assertSafeRegularOrMissing(root, path, '--stylesheet')
   if (!(await regularFile(resolved))) {
     throw new UnsupportedProjectError(
       `The root layout stylesheet import is not a regular project file: ${specifier}.`,
@@ -128,6 +136,7 @@ async function resolveAliasedStylesheet(
       'Make the alias unambiguous or select the intended file with --stylesheet.',
     )
   }
+  await assertSafeRegularOrMissing(root, matches[0]!, '--stylesheet')
   return matches[0]!
 }
 

@@ -142,7 +142,8 @@ async function assertDirectoryOrMissing(
   flag: '--test-dir' | '--utility-dir',
 ): Promise<void> {
   let current = root
-  for (const segment of path.split('/')) {
+  const segments = path.split('/')
+  for (const [index, segment] of segments.entries()) {
     current = join(current, segment)
     try {
       const metadata = await lstat(current)
@@ -150,6 +151,12 @@ async function assertDirectoryOrMissing(
         throw new UnsupportedProjectError(
           `${flag} contains a symbolic link: ${path}.`,
           `Choose a real directory with ${flag}.`,
+        )
+      }
+      if (index < segments.length - 1 && !metadata.isDirectory()) {
+        throw new UnsupportedProjectError(
+          `${flag} contains a non-directory path component: ${path}.`,
+          `Choose a valid directory with ${flag}.`,
         )
       }
     } catch (error) {

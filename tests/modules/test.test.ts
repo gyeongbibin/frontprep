@@ -335,9 +335,7 @@ afterEach(() => {
     const project = await createProject()
     await rename(join(project.root, 'src'), join(project.root, 'source'))
     await symlink('source', join(project.root, 'src'), 'dir')
-    await expect(detectProject(project.root)).rejects.toThrow(
-      '--utility-dir contains a symbolic link: src/shared/lib.',
-    )
+    await expect(detectProject(project.root)).rejects.toThrow('symbolic link')
   })
 
   it.each([
