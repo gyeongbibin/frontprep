@@ -5,6 +5,7 @@ import { FileSystem } from './filesystem.js'
 import { MANIFEST_PATH, serializeManifest } from './manifest.js'
 import { resolveProjectPath, toProjectPath, type ProjectPath } from './paths.js'
 import { ProcessRunner } from './process.js'
+import { rootForScope, type FileScope } from './scoped-paths.js'
 import type { ProjectContext } from './types.js'
 
 interface GitStatusEntry {
@@ -89,10 +90,10 @@ async function assertNotSubmodule(
 
 async function assertManifestPath(
   context: ProjectContext,
-  fileSystem: FileSystem,
   path: ProjectPath,
 ): Promise<void> {
   if (path === MANIFEST_PATH) {
+    const fileSystem = new FileSystem(context.root)
     const bytes = await fileSystem.read(path)
     if (
       bytes === null ||
@@ -106,13 +107,32 @@ async function assertManifestPath(
     return
   }
 
-  const recorded = context.manifest!.files[path]
-  if (recorded === undefined) {
+  const candidates = (
+    ['package', 'repository'] as const satisfies readonly FileScope[]
+  ).flatMap((scope) => {
+    const recorded = context.manifest!.files[scope][path]
+    return recorded === undefined ? [] : [{ recorded, scope }]
+  })
+  if (candidates.length === 0) {
     throw unsafeGitState(`Git path is not authorized: ${path}`, path)
   }
+
   try {
-    const snapshot = await fileSystem.snapshot(path)
-    if (!snapshot.exists || snapshot.hash !== recorded.hash) {
+    const matching = []
+    for (const candidate of candidates) {
+      const fileSystem = new FileSystem(rootForScope(context, candidate.scope))
+      const snapshot = await fileSystem.snapshot(path)
+      if (snapshot.exists && snapshot.hash === candidate.recorded.hash) {
+        matching.push(candidate)
+      }
+    }
+    if (matching.length > 1) {
+      throw unsafeGitState(
+        `Git path has multiple manifest records: ${path}`,
+        path,
+      )
+    }
+    if (matching.length !== 1) {
       throw unsafeGitState(
         `Git path does not match its manifest fingerprint: ${path}`,
         path,
@@ -148,8 +168,7 @@ export async function assertSafeGitState(
     )
   }
 
-  const fileSystem = new FileSystem(context.root)
   for (const entry of entries) {
-    await assertManifestPath(context, fileSystem, toProjectPath(entry.path))
+    await assertManifestPath(context, toProjectPath(entry.path))
   }
 }

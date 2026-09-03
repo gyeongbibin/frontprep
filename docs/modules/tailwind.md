@@ -43,28 +43,23 @@ The package split and configuration follow Tailwind's official
 the official
 [Prettier plugin configuration](https://github.com/tailwindlabs/prettier-plugin-tailwindcss#options).
 
-## Detected Paths
+## Resolved Paths
 
-The core adapter provides the application directory, source directory, root
-layout, and global stylesheet. Tailwind uses those values without scanning for
-a second application root.
+Tailwind consumes the single layout resolved by the core project model. It
+does not scan a separate list of conventional utility folders. Utility path
+priority is the explicit `--utility-dir` value, then `.frontprep.json`, then
+`src/shared/lib` for `src/app` or `shared/lib` for root `app` projects.
 
-The utility directory is selected inside the detected source root. The source
-root is `src/` for `src/app/` projects and the project root for `app/` projects.
-Tailwind inspects these candidates in order:
+The selected directory may be missing and is then created. An existing value
+must be a real directory with no symbolic-link component. Unrelated folders
+such as `src/lib/utils` do not change selection. A beta.0 manifest is migrated
+deterministically, so its previously managed utility directory remains in use.
 
-1. `<source-root>/shared/utils`
-2. `<source-root>/lib/utils`
-3. `<source-root>/utils`
-
-If exactly one candidate already exists as a real directory, Tailwind uses it.
-If none exists, it creates `<source-root>/shared/utils`. If multiple candidates
-exist, or a candidate or any of its path components is a symbolic link or
-non-directory entry, analysis fails rather than guessing or following the
-link.
-
-This produces `src/shared/utils` by default for a `src/app` project and
-`shared/utils` by default for an `app` project.
+Stylesheet selection follows `--stylesheet`, manifest, detected static import,
+and default priority with disagreement treated as an error. Both relative and
+TypeScript-path-alias imports are preserved. See the
+[project model v2 design](../superpowers/specs/2026-09-02-project-model-v2-design.md)
+for the complete selection and safety contract.
 
 ## Managed and Patched Files
 

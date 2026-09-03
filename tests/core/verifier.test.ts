@@ -1,4 +1,4 @@
-import { chmod, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
@@ -9,26 +9,16 @@ import type { FrontprepManifest, ModuleId } from '../../src/core/types.js'
 import { verifyModules, verifyStructure } from '../../src/core/verifier.js'
 import type { SetupModule } from '../../src/modules/types.js'
 import { createProject } from '../helpers/project.js'
+import { manifestV2 } from '../helpers/manifest.js'
 
-function manifest(files: FrontprepManifest['files'] = {}): FrontprepManifest {
-  return {
-    $schema:
-      'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json',
-    schemaVersion: 1,
+function manifest(
+  files: FrontprepManifest['files']['package'] = {},
+): FrontprepManifest {
+  return manifestV2({
     frontprepVersion: '0.1.0-beta.0',
-    adapter: 'next-app',
-    packageManager: 'pnpm@10.22.0',
-    paths: { app: 'src/app', stylesheet: 'src/app/globals.css' },
-    modules: {
-      quality: '1.0.0',
-      tailwind: '1.0.0',
-      test: '1.0.0',
-      'git-hooks': '1.0.0',
-      ci: '1.0.0',
-    },
-    files,
+    files: { package: files, repository: {} },
     managedScripts: { 'frontprep:check': 'pnpm run frontprep:lint' },
-  }
+  })
 }
 
 function setupModule(
@@ -163,5 +153,44 @@ describe('verification', () => {
     expect(await readFile(join(project.root, '.editorconfig'))).toEqual(
       editorBytes,
     )
+  })
+
+  it('fingerprints repository-scoped managed files', async () => {
+    const project = await createProject()
+    const workflowBytes = Buffer.from('name: changed\n')
+    await mkdir(join(project.root, '.github/workflows'), { recursive: true })
+    await writeFile(
+      join(project.root, '.github/workflows/ci.yml'),
+      workflowBytes,
+    )
+    const base = await detectProject(project.root)
+    const context = {
+      ...base,
+      manifest: manifestV2({
+        frontprepVersion: '0.1.0-beta.0',
+        files: {
+          package: {},
+          repository: {
+            '.github/workflows/ci.yml': {
+              hash: hashBytes(Buffer.from('name: expected\n')),
+              mode: '0644',
+              ownership: 'managed',
+            },
+          },
+        },
+        managedScripts: {},
+      }),
+    }
+    const calls: ModuleId[] = []
+    const modules = (
+      ['quality', 'tailwind', 'test', 'git-hooks', 'ci'] as const
+    ).map((id) => setupModule(id, calls))
+
+    const result = await verifyStructure(context, modules)
+
+    expect(result.issues).toContainEqual({
+      message: 'Managed file fingerprint does not match.',
+      path: '[repository] .github/workflows/ci.yml',
+    })
   })
 })

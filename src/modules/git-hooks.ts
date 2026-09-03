@@ -18,6 +18,7 @@ import {
   type ChangeIntent,
 } from '../core/intents.js'
 import { toProjectPath } from '../core/paths.js'
+import { manifestFile, scopedProjectPath } from '../core/scoped-paths.js'
 import type { ProjectContext } from '../core/types.js'
 import type {
   SetupModule,
@@ -208,7 +209,7 @@ async function canonicalOwnershipIssues(
     ) {
       continue
     }
-    const recorded = context.manifest?.files[path]
+    const recorded = manifestFile(context.manifest, scopedProjectPath(path))
     if (
       snapshot !== null &&
       recorded?.ownership === 'managed' &&

@@ -1,4 +1,5 @@
 import { toProjectPath, type ProjectPath } from './paths.js'
+import type { FileScope } from './scoped-paths.js'
 import type { ModuleId } from './types.js'
 
 export type DependencySection = 'dependencies' | 'devDependencies'
@@ -29,6 +30,7 @@ export interface ManagedFileIntent extends BaseIntent {
   kind: 'managed-file'
   mode: number
   path: ProjectPath
+  scope: FileScope
 }
 
 export interface ConfigFragmentIntent extends BaseIntent {
@@ -41,24 +43,28 @@ export interface LineSetIntent extends BaseIntent {
   kind: 'line-set'
   lines: readonly string[]
   path: ProjectPath
+  scope: FileScope
 }
 
 export interface CssImportIntent extends BaseIntent {
   importValue: string
   kind: 'css-import'
   path: ProjectPath
+  scope: FileScope
 }
 
 export interface StaticImportIntent extends BaseIntent {
   importValue: string
   kind: 'static-import'
   path: ProjectPath
+  scope: FileScope
 }
 
 export interface ExecutableFileIntent extends BaseIntent {
   content: string
   kind: 'executable-file'
   path: ProjectPath
+  scope: FileScope
 }
 
 export type ChangeIntent =
@@ -111,6 +117,7 @@ export function managedFileIntent(
   content: string,
   mode: number,
   reason: string,
+  scope: FileScope = 'package',
 ): ManagedFileIntent {
   return Object.freeze({
     kind: 'managed-file',
@@ -119,6 +126,7 @@ export function managedFileIntent(
     content,
     mode,
     reason,
+    scope,
   })
 }
 
@@ -148,6 +156,7 @@ export function lineSetIntent(
   path: string,
   lines: readonly string[],
   reason: string,
+  scope: FileScope = 'package',
 ): LineSetIntent {
   return Object.freeze({
     kind: 'line-set',
@@ -155,6 +164,7 @@ export function lineSetIntent(
     path: toProjectPath(path),
     lines: Object.freeze([...lines]),
     reason,
+    scope,
   })
 }
 
@@ -163,6 +173,7 @@ export function cssImportIntent(
   path: string,
   importValue: string,
   reason: string,
+  scope: FileScope = 'package',
 ): CssImportIntent {
   return Object.freeze({
     kind: 'css-import',
@@ -170,6 +181,7 @@ export function cssImportIntent(
     path: toProjectPath(path),
     importValue,
     reason,
+    scope,
   })
 }
 
@@ -178,6 +190,7 @@ export function staticImportIntent(
   path: string,
   importValue: string,
   reason: string,
+  scope: FileScope = 'package',
 ): StaticImportIntent {
   return Object.freeze({
     kind: 'static-import',
@@ -185,6 +198,7 @@ export function staticImportIntent(
     path: toProjectPath(path),
     importValue,
     reason,
+    scope,
   })
 }
 
@@ -193,6 +207,7 @@ export function executableFileIntent(
   path: string,
   content: string,
   reason: string,
+  scope: FileScope = 'package',
 ): ExecutableFileIntent {
   return Object.freeze({
     kind: 'executable-file',
@@ -200,5 +215,6 @@ export function executableFileIntent(
     path: toProjectPath(path),
     content,
     reason,
+    scope,
   })
 }

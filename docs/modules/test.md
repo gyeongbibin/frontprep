@@ -47,23 +47,24 @@ The package set and configuration follow the official
 [Vitest configuration](https://vitest.dev/config/), and
 [React Testing Library setup](https://testing-library.com/docs/react-testing-library/setup/).
 
-## Detected Setup Path
+## Resolved Setup Path
 
-The source root is `src/` for a `src/app/` project and the project root for an
-`app/` project. Test inspects these directories in order:
+Test consumes the single setup directory selected by the core project model.
+Priority is the explicit `--test-dir` value, then `.frontprep.json`, then
+`src/test` for `src/app` or `test` for root `app` projects. It does not scan
+`test` and `tests` candidates, so adding another conventional directory later
+cannot redirect verification.
 
-1. `<source-root>/test`
-2. `<source-root>/tests`
+The resulting setup file is `<resolved-test-directory>/setup.ts`. A selected
+directory may be missing and is then created. Existing paths must be real and
+must not contain symbolic-link components. Beta.0 manifests are migrated with
+their managed setup path preserved. See the
+[project model v2 design](../superpowers/specs/2026-09-02-project-model-v2-design.md)
+for the complete path authority contract.
 
-If exactly one candidate already exists as a real directory, Test uses it. If
-neither exists, it creates `<source-root>/test`. If both exist, or a candidate
-or any of its path components is a symbolic link or non-directory entry,
-analysis fails rather than guessing or following the link.
-
-The resulting setup file is `<detected-test-directory>/setup.ts`. This produces
-`src/test/setup.ts` by default for `src/app` and `test/setup.ts` by default for
-root `app`. Existing `__tests__` directories do not affect setup placement;
-they remain available for test files under Vitest's normal discovery rules.
+This module intentionally retains Vitest's current discovery behavior.
+Application-only discovery is delivered separately by the
+`fix/test-discovery` change.
 
 ## Managed Files
 

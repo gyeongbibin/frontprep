@@ -103,6 +103,7 @@ describe('package metadata', () => {
       'dist/cli.js.map',
       'package.json',
       'schema/manifest-v1.json',
+      'schema/manifest-v2.json',
     ])
     expect(packed.files.find(({ path }) => path === 'dist/cli.js')?.mode).toBe(
       0o755,

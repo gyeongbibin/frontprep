@@ -9,6 +9,7 @@ import { buildPlan } from '../../src/core/plan-builder.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import type { FrontprepManifest, ProjectContext } from '../../src/core/types.js'
 import { ciModule } from '../../src/modules/ci.js'
+import { manifestV2 } from '../helpers/manifest.js'
 import { createProject } from '../helpers/project.js'
 
 interface WorkflowStep {
@@ -90,33 +91,20 @@ function withManagedWorkflow(
   context: ProjectContext,
   bytes: Buffer,
 ): ProjectContext {
-  const manifest: FrontprepManifest = {
-    $schema:
-      'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json',
-    adapter: 'next-app',
+  const manifest: FrontprepManifest = manifestV2({
+    frontprepVersion: '0.1.0-beta.0',
     files: {
-      '.github/workflows/ci.yml': {
-        hash: hashBytes(bytes),
-        mode: '0644',
-        ownership: 'managed',
+      package: {},
+      repository: {
+        '.github/workflows/ci.yml': {
+          hash: hashBytes(bytes),
+          mode: '0644',
+          ownership: 'managed',
+        },
       },
     },
-    frontprepVersion: '0.1.0-beta.0',
     managedScripts: {},
-    modules: {
-      ci: '1.0.0',
-      'git-hooks': '1.0.0',
-      quality: '1.0.0',
-      tailwind: '1.0.0',
-      test: '1.0.0',
-    },
-    packageManager: 'pnpm@10.22.0',
-    paths: {
-      app: context.appDirectory,
-      stylesheet: context.stylesheetPath,
-    },
-    schemaVersion: 1,
-  }
+  })
   return Object.freeze({ ...context, manifest: Object.freeze(manifest) })
 }
 
@@ -147,6 +135,7 @@ describe('CI module plan', () => {
         moduleId: 'ci',
         path: '.github/workflows/ci.yml',
         reason: 'CI owns the GitHub Actions workflow.',
+        scope: 'repository',
       }),
     ])
   })

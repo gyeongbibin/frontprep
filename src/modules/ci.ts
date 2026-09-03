@@ -7,6 +7,7 @@ import {
 import { ConflictError } from '../core/errors.js'
 import { FileSystem, type FileSnapshot } from '../core/filesystem.js'
 import { toProjectPath } from '../core/paths.js'
+import { manifestFile, scopedProjectPath } from '../core/scoped-paths.js'
 import type { ProjectContext } from '../core/types.js'
 import type {
   SetupModule,
@@ -101,7 +102,10 @@ async function workflowConflict(
   ) {
     return null
   }
-  const recorded = context.manifest?.files[WORKFLOW_PATH]
+  const recorded = manifestFile(
+    context.manifest,
+    scopedProjectPath(WORKFLOW_PATH, 'repository'),
+  )
   if (
     snapshot !== null &&
     recorded?.ownership === 'managed' &&
@@ -149,6 +153,7 @@ function createIntents(): readonly ChangeIntent[] {
       CI_WORKFLOW,
       0o644,
       'CI owns the GitHub Actions workflow.',
+      'repository',
     ),
   ])
 }

@@ -34,4 +34,29 @@ describe('change intents', () => {
       ),
     ).toThrow('Unsafe project path')
   })
+
+  it('defaults file intents to package scope and accepts repository scope', () => {
+    expect(
+      managedFileIntent(
+        'quality',
+        '.editorconfig',
+        'root = true\n',
+        0o644,
+        'editor defaults',
+      ),
+    ).toMatchObject({ path: '.editorconfig', scope: 'package' })
+    expect(
+      managedFileIntent(
+        'ci',
+        '.github/workflows/ci.yml',
+        'name: CI\n',
+        0o644,
+        'CI workflow',
+        'repository',
+      ),
+    ).toMatchObject({
+      path: '.github/workflows/ci.yml',
+      scope: 'repository',
+    })
+  })
 })

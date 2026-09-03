@@ -24,7 +24,7 @@ import {
   applyPlan,
   type PackageManagerService,
 } from '../../src/core/transaction.js'
-import type { ModuleId } from '../../src/core/types.js'
+import type { ModuleId, ProjectDetectionOptions } from '../../src/core/types.js'
 import { qualityModule } from '../../src/modules/quality.js'
 import { tailwindModule } from '../../src/modules/tailwind.js'
 import type { SetupModule } from '../../src/modules/types.js'
@@ -115,8 +115,11 @@ async function applyOperations(
   }
 }
 
-async function tailwindIntents(root: string) {
-  const context = await detectProject(root)
+async function tailwindIntents(
+  root: string,
+  options: ProjectDetectionOptions = {},
+) {
+  const context = await detectProject(root, options)
   const analysis = await tailwindModule.analyze(context)
   return {
     analysis,
@@ -131,10 +134,10 @@ describe('tailwind module', () => {
     const { analysis, context, intents } = await tailwindIntents(project.root)
 
     expect(tailwindModule.id).toBe('tailwind')
-    expect(tailwindModule.version).toBe('1.0.0')
+    expect(tailwindModule.version).toBe('2.0.0')
     expect(analysis).toMatchObject({
       stylesheetPath: 'src/app/globals.css',
-      utilsDirectory: 'src/shared/utils',
+      utilsDirectory: 'src/shared/lib',
     })
     expect(
       intents
@@ -167,7 +170,7 @@ describe('tailwind module', () => {
         .map(({ mode, path }) => ({ mode, path })),
     ).toEqual([
       { mode: 0o644, path: 'postcss.config.mjs' },
-      { mode: 0o644, path: 'src/shared/utils/cn.ts' },
+      { mode: 0o644, path: 'src/shared/lib/cn.ts' },
     ])
     expect(
       intents.find((intent) => intent.kind === 'css-import'),
@@ -183,7 +186,7 @@ describe('tailwind module', () => {
         "export { cva, type VariantProps } from 'class-variance-authority'",
         "export { cn } from './cn'",
       ],
-      path: 'src/shared/utils/index.ts',
+      path: 'src/shared/lib/index.ts',
     })
     expect(
       intents.find((intent) => intent.kind === 'config-fragment'),
@@ -207,8 +210,8 @@ describe('tailwind module', () => {
         'postcss.config.mjs',
         'prettier.config.mjs',
         'src/app/globals.css',
-        'src/shared/utils/cn.ts',
-        'src/shared/utils/index.ts',
+        'src/shared/lib/cn.ts',
+        'src/shared/lib/index.ts',
       ]),
     )
   })
@@ -228,13 +231,13 @@ describe('tailwind module', () => {
       path: 'app/layout.tsx',
     })
     expect(intents.find((intent) => intent.kind === 'line-set')).toMatchObject({
-      path: 'shared/utils/index.ts',
+      path: 'shared/lib/index.ts',
     })
     expect(
       intents
         .filter((intent) => intent.kind === 'managed-file')
         .map(({ path }) => path),
-    ).toContain('shared/utils/cn.ts')
+    ).toContain('shared/lib/cn.ts')
   })
 
   it('targets the stylesheet actually imported by the detected layout', async () => {
@@ -262,15 +265,33 @@ describe('tailwind module', () => {
     })
   })
 
+  it('preserves an existing aliased stylesheet import', async () => {
+    const project = await createProject({
+      layout: "import '@/styles/theme.css'\n",
+    })
+    await mkdir(join(project.root, 'src/styles'), { recursive: true })
+    await writeFile(join(project.root, 'src/styles/theme.css'), 'body {}\n')
+    await writeFile(
+      join(project.root, 'tsconfig.json'),
+      '{"compilerOptions":{"baseUrl":".","paths":{"@/*":["src/*"]}}}\n',
+    )
+
+    const { analysis, intents } = await tailwindIntents(project.root)
+
+    expect(analysis.stylesheetPath).toBe('src/styles/theme.css')
+    expect(intents.some((intent) => intent.kind === 'static-import')).toBe(
+      false,
+    )
+  })
+
   it('rejects a symbolic-link root layout instead of following it', async () => {
     const project = await createProject()
     const layoutPath = join(project.root, 'src/app/layout.tsx')
     await rename(layoutPath, join(project.root, 'src/app/layout.actual.tsx'))
     await symlink('layout.actual.tsx', layoutPath)
-    const context = await detectProject(project.root)
 
-    await expect(tailwindModule.analyze(context)).rejects.toThrow(
-      'Root layout path contains a symbolic link: src/app/layout.tsx.',
+    await expect(detectProject(project.root)).rejects.toThrow(
+      'Exactly one App Router root is required',
     )
   })
 
@@ -278,11 +299,7 @@ describe('tailwind module', () => {
     const project = await createProject({ appDirectory: 'app' })
     await rename(join(project.root, 'app'), join(project.root, 'app-target'))
     await symlink('app-target', join(project.root, 'app'))
-    const context = await detectProject(project.root)
-
-    await expect(tailwindModule.analyze(context)).rejects.toThrow(
-      'Root layout path contains a symbolic link: app.',
-    )
+    await expect(detectProject(project.root)).rejects.toThrow('symbolic link')
   })
 
   it('rejects a stylesheet reached through an ancestor symbolic link', async () => {
@@ -297,38 +314,31 @@ describe('tailwind module', () => {
       join(project.root, 'src/app/layout.tsx'),
       "import '../styles/theme.css'\n\nexport default function Layout() { return null }\n",
     )
-    const context = await detectProject(project.root)
-
-    await expect(tailwindModule.analyze(context)).rejects.toThrow(
-      'Stylesheet path contains a symbolic link: src/styles.',
-    )
+    await expect(detectProject(project.root)).rejects.toThrow('symbolic link')
   })
 
-  it.each([
-    ['src/shared/utils', 'src/shared/utils'],
-    ['src/lib/utils', 'src/lib/utils'],
-    ['src/utils', 'src/utils'],
-  ])(
-    'reuses the single existing utility directory %s',
-    async (path, expected) => {
+  it.each(['src/domain/ui/lib', 'src/lib/utils', 'src/utils'])(
+    'uses the explicitly selected utility directory %s',
+    async (path) => {
       const project = await createProject()
       await mkdir(join(project.root, path), { recursive: true })
 
-      const { analysis } = await tailwindIntents(project.root)
+      const { analysis } = await tailwindIntents(project.root, {
+        utilityDirectory: path,
+      })
 
-      expect(analysis.utilsDirectory).toBe(expected)
+      expect(analysis.utilsDirectory).toBe(path)
     },
   )
 
-  it('rejects multiple existing utility directories instead of guessing', async () => {
+  it('does not let conventional directories override the resolved default', async () => {
     const project = await createProject()
     await mkdir(join(project.root, 'src/lib/utils'), { recursive: true })
     await mkdir(join(project.root, 'src/utils'), { recursive: true })
-    const context = await detectProject(project.root)
 
-    await expect(tailwindModule.analyze(context)).rejects.toThrow(
-      'Multiple utility directories were detected: src/lib/utils, src/utils.',
-    )
+    const { analysis } = await tailwindIntents(project.root)
+
+    expect(analysis.utilsDirectory).toBe('src/shared/lib')
   })
 
   it.each(['symbolic link', 'non-directory'])(
@@ -341,32 +351,31 @@ describe('tailwind module', () => {
       } else {
         await writeFile(candidate, 'not a directory\n')
       }
-      const context = await detectProject(project.root)
-
-      await expect(tailwindModule.analyze(context)).rejects.toThrow(
+      await expect(
+        detectProject(project.root, { utilityDirectory: 'src/utils' }),
+      ).rejects.toThrow(
         kind === 'symbolic link'
-          ? 'Utility path contains a symbolic link: src/utils.'
-          : 'Utility path must be a real directory: src/utils.',
+          ? '--utility-dir contains a symbolic link: src/utils.'
+          : '--utility-dir must be a real directory or a missing directory: src/utils.',
       )
     },
   )
 
   it('rejects a utility directory reached through an ancestor symbolic link', async () => {
     const project = await createProject()
-    await mkdir(join(project.root, 'src/shared-target/utils'), {
+    await mkdir(join(project.root, 'src/shared-target/lib'), {
       recursive: true,
     })
     await symlink('shared-target', join(project.root, 'src/shared'))
-    const context = await detectProject(project.root)
 
-    await expect(tailwindModule.analyze(context)).rejects.toThrow(
-      'Utility path contains a symbolic link: src/shared.',
+    await expect(detectProject(project.root)).rejects.toThrow(
+      '--utility-dir contains a symbolic link: src/shared/lib.',
     )
   })
 
   it('stops init before writing through a utility ancestor symbolic link', async () => {
     const project = await createProject()
-    await mkdir(join(project.root, 'src/shared-target/utils'), {
+    await mkdir(join(project.root, 'src/shared-target/lib'), {
       recursive: true,
     })
     await symlink('shared-target', join(project.root, 'src/shared'))
@@ -378,14 +387,14 @@ describe('tailwind module', () => {
 
     await expect(
       runInit({ cwd: project.root }, tailwindCommandServices(packageManager)),
-    ).rejects.toThrow('Utility path contains a symbolic link: src/shared.')
+    ).rejects.toThrow('--utility-dir contains a symbolic link: src/shared/lib.')
 
     expect(packageManager.installs).toBe(0)
     expect(await readFile(join(project.root, 'package.json'), 'utf8')).toBe(
       originalPackage,
     )
     await expect(
-      readFile(join(project.root, 'src/shared-target/utils/cn.ts')),
+      readFile(join(project.root, 'src/shared-target/lib/cn.ts')),
     ).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
@@ -468,7 +477,9 @@ describe('tailwind module', () => {
       "export { formatDate } from './date'\nexport { cn } from './cn'\n",
     )
 
-    const { intents } = await tailwindIntents(project.root)
+    const { intents } = await tailwindIntents(project.root, {
+      utilityDirectory: 'src/lib/utils',
+    })
     const lineSet = intents.find((intent) => intent.kind === 'line-set')
 
     expect(lineSet).toMatchObject({
@@ -494,8 +505,8 @@ export { cn } from './cn'
 `,
   ])('rejects a conflicting utility barrel symbol', async (contents) => {
     const project = await createProject()
-    await mkdir(join(project.root, 'src/shared/utils'), { recursive: true })
-    await writeFile(join(project.root, 'src/shared/utils/index.ts'), contents)
+    await mkdir(join(project.root, 'src/shared/lib'), { recursive: true })
+    await writeFile(join(project.root, 'src/shared/lib/index.ts'), contents)
     const context = await detectProject(project.root)
 
     await expect(tailwindModule.analyze(context)).rejects.toThrow(
@@ -575,17 +586,17 @@ export { cn } from './cn'
     expect(packageManager.installs).toBe(1)
     expect(result.manifest?.modules).toMatchObject({
       quality: '1.0.0',
-      tailwind: '1.0.0',
+      tailwind: '2.0.0',
     })
     expect(
       await readFile(join(project.root, 'postcss.config.mjs'), 'utf8'),
     ).toContain("'@tailwindcss/postcss': {}")
     expect(
-      await readFile(join(project.root, 'src/shared/utils/cn.ts'), 'utf8'),
+      await readFile(join(project.root, 'src/shared/lib/cn.ts'), 'utf8'),
     ).toContain('export function cn')
     expect(
       await readFile(join(project.root, '.frontprep.json'), 'utf8'),
-    ).toContain('"tailwind": "1.0.0"')
+    ).toContain('"tailwind": "2.0.0"')
   })
 
   it('rolls back Tailwind files when project verification fails', async () => {
@@ -617,7 +628,7 @@ export { cn } from './cn'
       readFile(join(project.root, 'postcss.config.mjs')),
     ).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(
-      readFile(join(project.root, 'src/shared/utils/cn.ts')),
+      readFile(join(project.root, 'src/shared/lib/cn.ts')),
     ).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(
       readFile(join(project.root, '.frontprep.json')),
@@ -698,14 +709,14 @@ export { cn } from './cn'
         ...(await tailwindModule.plan(context, tailwindAnalysis)),
       ])
       await applyOperations(project.root, plan.operations)
-      await writeFile(join(project.root, 'src/shared/utils/index.ts'), contents)
+      await writeFile(join(project.root, 'src/shared/lib/index.ts'), contents)
 
       const updatedContext = await detectProject(project.root)
       const result = await tailwindModule.verify(updatedContext)
 
       expect(result.issues).toContainEqual({
         message: 'Required utility barrel exports are missing or changed.',
-        path: 'src/shared/utils/index.ts',
+        path: 'src/shared/lib/index.ts',
       })
     },
   )
@@ -733,11 +744,11 @@ export { cn } from './cn'
         },
         {
           message: 'Managed class utility is missing or changed.',
-          path: 'src/shared/utils/cn.ts',
+          path: 'src/shared/lib/cn.ts',
         },
         {
           message: 'Required utility barrel exports are missing or changed.',
-          path: 'src/shared/utils/index.ts',
+          path: 'src/shared/lib/index.ts',
         },
         {
           message: 'Tailwind Prettier configuration is missing or changed.',

@@ -64,4 +64,27 @@ describe('runCheck', () => {
       'project',
     ])
   })
+
+  it('reports an available manifest migration without writing', async () => {
+    const project = await createProject()
+    const detected = await detectProject(project.root)
+    const context = Object.freeze({
+      ...detected,
+      manifestNeedsMigration: true,
+    })
+    const reporter = new RecordingReporter()
+    const services: CheckServices = {
+      assertSafeGitState: async () => undefined,
+      detectProject: async () => context,
+      frontprepVersion: '0.1.0-beta.0',
+      modules: [],
+      reporter,
+      runProjectCheck: async () => undefined,
+      verifyStructure: async () => ({ issues: [], valid: true }),
+    }
+
+    await runCheck({ cwd: project.root }, services)
+
+    expect(reporter.events).toContain('migration-available')
+  })
 })

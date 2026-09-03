@@ -1,6 +1,7 @@
 import { FrontprepError } from './errors.js'
 import { ProcessFailure } from './process.js'
-import type { ModuleId } from './types.js'
+import { displayScopedPath, type ScopedProjectPath } from './scoped-paths.js'
+import type { ModuleId, ProjectContext } from './types.js'
 
 export interface OutputWriter {
   readonly isTTY?: boolean
@@ -30,12 +31,27 @@ export class Reporter {
     this.stdout.write(`frontprep ${version}\n`)
   }
 
-  detected(): void {
+  detected(context: ProjectContext): void {
     this.status('Detected Next.js App Router with pnpm')
+    const { layout } = context
+    this.stdout.write(`  App: ${layout.appDirectory} (${layout.layoutPath})\n`)
+    this.stdout.write(
+      `  Stylesheet: ${layout.stylesheet.path} [${layout.stylesheet.source}, ${layout.stylesheet.importKind}: ${layout.stylesheet.importSpecifier}]\n`,
+    )
+    this.stdout.write(
+      `  Utilities: ${layout.utilities.path} [${layout.utilities.source}]\n`,
+    )
+    this.stdout.write(
+      `  Tests: ${layout.tests.path} [${layout.tests.source}]\n`,
+    )
   }
 
   modulePassed(moduleId: ModuleId): void {
     this.status(moduleId)
+  }
+
+  migrationAvailable(): void {
+    this.status('Manifest schema v2 migration is available; run frontprep init')
   }
 
   alreadyApplied(): void {
@@ -46,8 +62,11 @@ export class Reporter {
     this.status('No files changed')
   }
 
-  filesChanged(paths: readonly string[]): void {
+  filesChanged(paths: readonly ScopedProjectPath[]): void {
     this.status(`Changed ${paths.length} file${paths.length === 1 ? '' : 's'}`)
+    for (const path of paths) {
+      this.stdout.write(`  ${displayScopedPath(path)}\n`)
+    }
   }
 
   projectPassed(): void {
@@ -56,7 +75,7 @@ export class Reporter {
 
   error(error: unknown): void {
     if (error instanceof FrontprepError) {
-      this.stderr.write(`[${error.phase}] ${error.message}\n`)
+      this.stderr.write(`[${error.phase}:${error.code}] ${error.message}\n`)
       if (error.moduleId !== undefined) {
         this.stderr.write(`Module: ${error.moduleId}\n`)
       }

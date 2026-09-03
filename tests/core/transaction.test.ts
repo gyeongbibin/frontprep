@@ -4,12 +4,14 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { hashBytes } from '../../src/core/filesystem.js'
+import { writeManifest } from '../../src/core/manifest.js'
 import type {
   GitHooksActivation,
   GitHooksService,
 } from '../../src/core/git-hooks.js'
 import type { ChangePlan, FileOperation } from '../../src/core/plan.js'
 import { toProjectPath } from '../../src/core/paths.js'
+import type { FileScope } from '../../src/core/scoped-paths.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import {
   applyPlan,
@@ -18,6 +20,7 @@ import {
 } from '../../src/core/transaction.js'
 import type { ModuleId } from '../../src/core/types.js'
 import { createProject } from '../helpers/project.js'
+import { manifestV2 } from '../helpers/manifest.js'
 
 const MODULE_VERSIONS: Readonly<Record<ModuleId, string>> = {
   quality: '1.0.0',
@@ -36,7 +39,10 @@ function plan(
     managedScripts: {},
     operations,
     snapshot: Object.fromEntries(
-      operations.map(({ beforeHash, path }) => [path, beforeHash]),
+      operations.map(({ beforeHash, path, scope }) => [
+        `${scope}:${path}`,
+        beforeHash,
+      ]),
     ),
     summary: { quality: 0, tailwind: 0, test: 0, 'git-hooks': 0, ci: 0 },
   }
@@ -47,6 +53,7 @@ function operation(
   contents: string,
   beforeHash: string | null,
   mode = 0o644,
+  scope: FileScope = 'package',
 ): FileOperation {
   return {
     afterBytes: Buffer.from(contents),
@@ -55,6 +62,7 @@ function operation(
     moduleIds: ['quality'],
     ownership: 'managed',
     path: toProjectPath(path),
+    scope,
   }
 }
 
@@ -224,6 +232,42 @@ describe('applyPlan', () => {
     ).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
+  it('writes a changed manifest transactionally for an unchanged plan', async () => {
+    const project = await createProject()
+    await writeManifest(project.root, manifestV2({ frontprepVersion: '0.0.9' }))
+    const context = await detectProject(project.root)
+    const packageManager = new TestPackageManager()
+    const result = await applyPlan(context, plan([]), {
+      ...services(packageManager),
+      writeManifestWhenUnchanged: true,
+    })
+
+    expect(result.changed).toBe(true)
+    expect(result.changedFiles).toEqual([
+      { path: '.frontprep.json', scope: 'package' },
+    ])
+    expect(packageManager.installs).toBe(0)
+  })
+
+  it('restores the original manifest when migration verification fails', async () => {
+    const project = await createProject()
+    await writeManifest(project.root, manifestV2({ frontprepVersion: '0.0.9' }))
+    const original = await readFile(join(project.root, '.frontprep.json'))
+    const context = await detectProject(project.root)
+
+    await expect(
+      applyPlan(context, plan([]), {
+        ...services(new TestPackageManager(), async () => {
+          throw new Error('migration verification failed')
+        }),
+        writeManifestWhenUnchanged: true,
+      }),
+    ).rejects.toThrow('migration verification failed')
+    expect(await readFile(join(project.root, '.frontprep.json'))).toEqual(
+      original,
+    )
+  })
+
   it('installs once, verifies written files, and writes the manifest last', async () => {
     const project = await createProject()
     const context = await detectProject(project.root)
@@ -250,13 +294,17 @@ describe('applyPlan', () => {
     expect(packageManager.supportedChecks).toBe(1)
     expect(packageManager.installs).toBe(1)
     expect(manifestExistedDuringVerification).toBe(false)
-    expect(result.changedFiles).toEqual(['.editorconfig', 'pnpm-lock.yaml'])
-    expect(result.manifest?.files['.editorconfig']).toMatchObject({
+    expect(result.changedFiles).toEqual([
+      { path: '.editorconfig', scope: 'package' },
+      { path: 'pnpm-lock.yaml', scope: 'repository' },
+      { path: '.frontprep.json', scope: 'package' },
+    ])
+    expect(result.manifest?.files.package['.editorconfig']).toMatchObject({
       hash: hashBytes(Buffer.from('root = true\n')),
       mode: '0644',
       ownership: 'managed',
     })
-    expect(result.manifest?.files['pnpm-lock.yaml']).toMatchObject({
+    expect(result.manifest?.files.repository['pnpm-lock.yaml']).toMatchObject({
       ownership: 'patched',
     })
     expect(

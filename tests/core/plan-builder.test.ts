@@ -15,7 +15,7 @@ import {
 import { hashBytes } from '../../src/core/filesystem.js'
 import { buildPlan } from '../../src/core/plan-builder.js'
 import { detectProject } from '../../src/core/project-detector.js'
-import type { FrontprepManifest } from '../../src/core/types.js'
+import { manifestV2 } from '../helpers/manifest.js'
 import { createProject } from '../helpers/project.js'
 
 describe('plan builder', () => {
@@ -69,6 +69,13 @@ describe('plan builder', () => {
       'package.json',
       'prettier.config.mjs',
       'src/app/globals.css',
+    ])
+    expect(plan.operations.every(({ scope }) => scope === 'package')).toBe(true)
+    expect(Object.keys(plan.snapshot)).toEqual([
+      'package:.prettierignore',
+      'package:package.json',
+      'package:prettier.config.mjs',
+      'package:src/app/globals.css',
     ])
     expect(plan.dependenciesChanged).toBe(true)
     expect(plan.managedScripts).toEqual({ 'frontprep:lint': 'eslint .' })
@@ -156,36 +163,54 @@ describe('plan builder', () => {
     expect(plan.operations[0]?.moduleIds).toEqual(['quality', 'ci'])
   })
 
+  it('plans equal relative paths independently by scope', async () => {
+    const project = await createProject()
+    const context = await detectProject(project.root)
+
+    const plan = await buildPlan(context, [
+      managedFileIntent('quality', 'same.txt', 'same\n', 0o644, 'package file'),
+      managedFileIntent(
+        'ci',
+        'same.txt',
+        'same\n',
+        0o644,
+        'repository file',
+        'repository',
+      ),
+    ])
+
+    expect(plan.operations.map(({ path, scope }) => ({ path, scope }))).toEqual(
+      [
+        { path: 'same.txt', scope: 'package' },
+        { path: 'same.txt', scope: 'repository' },
+      ],
+    )
+    expect(plan.snapshot).toEqual({
+      'package:same.txt': null,
+      'repository:same.txt': null,
+    })
+  })
+
   it('rejects a user-modified managed file', async () => {
     const project = await createProject()
     const configPath = join(project.root, 'eslint.config.mjs')
     await writeFile(configPath, 'export default []\n')
     await chmod(configPath, 0o644)
     const context = await detectProject(project.root)
-    const manifest: FrontprepManifest = {
-      $schema:
-        'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json',
-      schemaVersion: 1,
+    const manifest = manifestV2({
       frontprepVersion: '0.1.0-beta.0',
-      adapter: 'next-app',
-      packageManager: 'pnpm@10.22.0',
-      paths: { app: 'src/app', stylesheet: 'src/app/globals.css' },
-      modules: {
-        quality: '1.0.0',
-        tailwind: '1.0.0',
-        test: '1.0.0',
-        'git-hooks': '1.0.0',
-        ci: '1.0.0',
-      },
       files: {
-        'eslint.config.mjs': {
-          hash: hashBytes(Buffer.from('original\n')),
-          mode: '0644',
-          ownership: 'managed',
+        package: {
+          'eslint.config.mjs': {
+            hash: hashBytes(Buffer.from('original\n')),
+            mode: '0644',
+            ownership: 'managed',
+          },
         },
+        repository: {},
       },
       managedScripts: {},
-    }
+    })
 
     await expect(
       buildPlan(Object.freeze({ ...context, manifest }), [

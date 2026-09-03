@@ -29,6 +29,7 @@ import type { ModuleId } from '../../src/core/types.js'
 import { qualityModule } from '../../src/modules/quality.js'
 import { testModule } from '../../src/modules/test.js'
 import type { SetupModule } from '../../src/modules/types.js'
+import { manifestV2 } from '../helpers/manifest.js'
 import { createProject } from '../helpers/project.js'
 
 class SilentReporter implements CommandReporter {
@@ -131,33 +132,20 @@ function withManagedFile(
   path: string,
   bytes: Buffer,
 ): ProjectContext {
-  const manifest: FrontprepManifest = {
-    $schema:
-      'https://unpkg.com/@mingyeongbin/frontprep/schema/manifest-v1.json',
-    schemaVersion: 1,
+  const manifest: FrontprepManifest = manifestV2({
     frontprepVersion: '0.1.0-beta.0',
-    adapter: 'next-app',
-    packageManager: 'pnpm@10.22.0',
-    paths: {
-      app: context.appDirectory,
-      stylesheet: context.stylesheetPath,
-    },
-    modules: {
-      quality: '1.0.0',
-      tailwind: '1.0.0',
-      test: '1.0.0',
-      'git-hooks': '1.0.0',
-      ci: '1.0.0',
-    },
     files: {
-      [path]: {
-        hash: hashBytes(bytes),
-        mode: '0644',
-        ownership: 'managed',
+      package: {
+        [path]: {
+          hash: hashBytes(bytes),
+          mode: '0644',
+          ownership: 'managed',
+        },
       },
+      repository: {},
     },
     managedScripts: {},
-  }
+  })
   return Object.freeze({ ...context, manifest: Object.freeze(manifest) })
 }
 
@@ -170,7 +158,7 @@ describe('test module', () => {
     const intents = await testModule.plan(context, analysis)
 
     expect(testModule.id).toBe('test')
-    expect(testModule.version).toBe('1.0.0')
+    expect(testModule.version).toBe('2.0.0')
     expect(analysis).toEqual({
       setupDirectory: 'src/test',
       setupPath: 'src/test/setup.ts',
@@ -300,35 +288,37 @@ afterEach(() => {
 
   it.each([
     ['src/test', 'src/test/setup.ts'],
-    ['src/tests', 'src/tests/setup.ts'],
-  ])('reuses the single existing test directory %s', async (path, expected) => {
+    ['tests/unit', 'tests/unit/setup.ts'],
+  ])(
+    'uses the explicitly selected test directory %s',
+    async (path, expected) => {
+      const project = await createProject()
+      await mkdir(join(project.root, path), { recursive: true })
+      const context = await detectProject(project.root, { testDirectory: path })
+
+      const analysis = await testModule.analyze(context)
+
+      expect(analysis.setupPath).toBe(expected)
+    },
+  )
+
+  it('does not let a conventional directory override the resolved default', async () => {
     const project = await createProject()
-    await mkdir(join(project.root, path), { recursive: true })
-    const context = await detectProject(project.root)
-
-    const analysis = await testModule.analyze(context)
-
-    expect(analysis.setupPath).toBe(expected)
-  })
-
-  it('rejects multiple existing test directories instead of guessing', async () => {
-    const project = await createProject()
-    await mkdir(join(project.root, 'src/test'), { recursive: true })
     await mkdir(join(project.root, 'src/tests'), { recursive: true })
     const context = await detectProject(project.root)
 
-    await expect(testModule.analyze(context)).rejects.toThrow(
-      'Multiple test directories were detected: src/test, src/tests.',
-    )
+    await expect(testModule.analyze(context)).resolves.toMatchObject({
+      setupPath: 'src/test/setup.ts',
+    })
   })
 
   it('rejects a test candidate that is not a directory', async () => {
     const project = await createProject()
     await writeFile(join(project.root, 'src/tests'), 'not a directory\n')
-    const context = await detectProject(project.root)
-
-    await expect(testModule.analyze(context)).rejects.toThrow(
-      'Test path must be a real directory: src/tests.',
+    await expect(
+      detectProject(project.root, { testDirectory: 'src/tests' }),
+    ).rejects.toThrow(
+      '--test-dir must be a real directory or a missing directory: src/tests.',
     )
   })
 
@@ -336,10 +326,8 @@ afterEach(() => {
     const project = await createProject()
     await mkdir(join(project.root, 'src/test-target'), { recursive: true })
     await symlink('test-target', join(project.root, 'src/test'))
-    const context = await detectProject(project.root)
-
-    await expect(testModule.analyze(context)).rejects.toThrow(
-      'Test path contains a symbolic link: src/test.',
+    await expect(detectProject(project.root)).rejects.toThrow(
+      '--test-dir contains a symbolic link: src/test.',
     )
   })
 
@@ -347,11 +335,7 @@ afterEach(() => {
     const project = await createProject()
     await rename(join(project.root, 'src'), join(project.root, 'source'))
     await symlink('source', join(project.root, 'src'), 'dir')
-    const context = await detectProject(project.root)
-
-    await expect(testModule.analyze(context)).rejects.toThrow(
-      'Test path contains a symbolic link: src.',
-    )
+    await expect(detectProject(project.root)).rejects.toThrow('symbolic link')
   })
 
   it.each([
@@ -509,7 +493,7 @@ afterEach(() => {
       await expect(testModule.analyze(context)).rejects.toThrow(
         path === 'vitest.config.mts'
           ? 'Vitest configuration conflicts at vitest.config.mts.'
-          : 'Test setup conflicts at src/test/setup.ts.',
+          : 'Test setup path contains a symbolic link: src/test/setup.ts.',
       )
     },
   )
@@ -718,7 +702,7 @@ afterEach(() => {
     )
   })
 
-  it('reports a test-directory ambiguity introduced after setup', async () => {
+  it('keeps the resolved test directory when another convention appears', async () => {
     const project = await createProject()
     const plan = await qualityAndTestPlan(project.root)
     await applyOperations(project.root, plan.operations)
@@ -727,11 +711,7 @@ afterEach(() => {
     const updatedContext = await detectProject(project.root)
     const result = await testModule.verify(updatedContext)
 
-    expect(result.valid).toBe(false)
-    expect(result.issues).toContainEqual({
-      message: 'Multiple test directories were detected: src/test, src/tests.',
-      path: 'src',
-    })
+    expect(result.valid).toBe(true)
   })
 
   it('runs init twice with one install and a manifest-backed no-change rerun', async () => {
@@ -754,12 +734,12 @@ afterEach(() => {
     expect(first.changed).toBe(true)
     expect(first.changedFiles).toEqual(
       expect.arrayContaining([
-        'package.json',
-        'vitest.config.mts',
-        'src/test/setup.ts',
+        { path: 'package.json', scope: 'package' },
+        { path: 'vitest.config.mts', scope: 'package' },
+        { path: 'src/test/setup.ts', scope: 'package' },
       ]),
     )
-    expect(first.manifest?.files).toMatchObject({
+    expect(first.manifest?.files.package).toMatchObject({
       'vitest.config.mts': { mode: '0644', ownership: 'managed' },
       'src/test/setup.ts': { mode: '0644', ownership: 'managed' },
     })
