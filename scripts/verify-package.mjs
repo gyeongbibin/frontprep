@@ -91,6 +91,18 @@ try {
     installDirectory,
     'node_modules/@mingyeongbin/frontprep/dist/cli.js',
   )
+  for (const schema of ['manifest-v1.json', 'manifest-v2.json']) {
+    assert.doesNotThrow(() =>
+      readFileSync(
+        join(
+          installDirectory,
+          'node_modules/@mingyeongbin/frontprep/schema',
+          schema,
+        ),
+        'utf8',
+      ),
+    )
+  }
   assert.equal(statSync(installedEntry).mode & 0o777, 0o755)
   assert.equal(
     readFileSync(installedEntry, 'utf8').startsWith('#!/usr/bin/env node\n'),

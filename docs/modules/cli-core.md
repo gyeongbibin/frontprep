@@ -27,23 +27,32 @@ src/
 │   ├── filesystem.ts              normalized reads and atomic writes
 │   ├── transaction.ts             backup, apply, restore, and cleanup
 │   ├── package-manager.ts         pnpm version check and child processes
-│   ├── manifest.ts                schema validation, hashing, and serialization
+│   ├── manifest.ts                dual-schema validation and v2 serialization
+│   ├── manifest-migration.ts      deterministic manifest v1 normalization
 │   ├── verifier.ts                module and full-project verification
 │   └── reporter.ts                stable human-readable status output
 ├── adapters/
-│   └── next-app.ts                app root, layout, stylesheet, and source paths
+│   ├── next-app.ts                app root, layout, stylesheet, and source paths
+│   ├── static-imports.ts          lexical static CSS import extraction
+│   └── typescript-paths.ts        JSONC baseUrl and paths alias resolution
 ├── modules/
 │   ├── registry.ts                fixed v1 module order
 │   └── types.ts                   SetupModule and verification contracts
-└── schemas/
-    └── manifest-v1.json           published JSON Schema
+└── schema/
+    ├── manifest-v1.json           migration input JSON Schema
+    └── manifest-v2.json           current persisted JSON Schema
 ```
 
 Files remain focused on one responsibility. The command files coordinate services but do not implement filesystem or module policy.
 
 ## Command Parsing
 
-The executable is an ESM Node.js program with a `#!/usr/bin/env node` header. It accepts `init`, `check`, `--help`, `--version`, and an optional `--cwd` for both commands. Unknown commands, extra positional arguments, missing option values, and nonexistent directories are usage errors with exit code `2`.
+The executable is an ESM Node.js program with a `#!/usr/bin/env node` header.
+It accepts `init`, `check`, `--help`, `--version`, and an optional `--cwd` for
+both commands. `init` additionally accepts `--stylesheet`, `--utility-dir`, and
+`--test-dir`. `check` remains manifest-driven and read-only. Unknown commands,
+extra positional arguments, missing option values, and nonexistent directories
+are usage errors with exit code `2`.
 
 The top-level entry catches only typed frontprep errors for concise output. Unexpected errors retain a stack trace when `DEBUG=frontprep` is set and otherwise print an incident identifier plus the underlying message.
 
@@ -57,11 +66,26 @@ The top-level entry catches only typed frontprep errors for concise output. Unex
 4. Parse and validate `packageManager` as pnpm 10.
 5. validate Next.js 16 and TypeScript 5 declarations.
 6. Reject package workspaces and non-empty workspace package globs.
-7. Invoke the Next App Router adapter.
-8. Load and validate `.frontprep.json` when present.
-9. Apply the Git safety policy.
+7. Load and validate manifest schema v1 or v2 when present.
+8. Invoke the Next App Router adapter and resolve stylesheet imports.
+9. Normalize schema v1 in memory and resolve utility/test paths.
+10. Apply the Git safety policy.
 
-The adapter requires exactly one root layout among `app/layout.{ts,tsx}` and `src/app/layout.{ts,tsx}`. It recognizes static relative CSS imports in that layout. One imported global stylesheet is selected; no import selects a sibling `globals.css`; multiple candidates produce an ambiguity error.
+The adapter requires exactly one root layout among `app/layout.{ts,tsx}` and
+`src/app/layout.{ts,tsx}`. It lexically recognizes static side-effect CSS
+imports without executing consumer code. Relative imports and TypeScript JSONC
+`baseUrl`/`paths` aliases must resolve to exactly one regular project file.
+`tsconfig` inheritance is deferred. No import selects a sibling `globals.css`;
+multiple imports or alias targets produce an actionable ambiguity error.
+
+The immutable project layout records app, layout, source, stylesheet, utility,
+test, and test-setup paths plus selection provenance. Priority is explicit
+option, normalized manifest, detected stylesheet import, then canonical
+default. Options that disagree with a manifest or actual import are rejected.
+Missing utility/test directories are eligible for creation; files, unsafe
+paths, and symbolic-link components are rejected.
+
+Nested workspace targeting is intentionally deferred to the next feature PR.
 
 The detector never walks outside the resolved root and rejects paths whose realpath escapes through a symlink.
 
@@ -109,7 +133,12 @@ The core obtains porcelain v1 status with NUL delimiters so filenames are parsed
 
 Without a manifest, any dirty path blocks `init`.
 
-With a manifest, dirty state is allowed only for the immediate idempotency case. Each dirty path must be present in `files`, and each current hash must equal its manifest hash. The manifest path itself is allowed only when its bytes equal canonical serialization. Deleted files, renamed files, submodule changes, conflicted entries, and additional untracked files always block execution.
+With a manifest, dirty state is allowed only for the immediate idempotency
+case. Each dirty path must be present in its package or repository file map,
+and each current hash must equal its manifest hash. The manifest path itself is
+allowed only when its bytes equal canonical serialization. Deleted files,
+renamed files, submodule changes, conflicted entries, and additional untracked
+files always block execution.
 
 `check` is read-only but uses the same guard. A clean committed project is always eligible for analysis even when user commits have changed a previously managed file; ownership validation then reports the exact managed-file drift without overwriting it.
 
@@ -133,13 +162,27 @@ With a manifest, dirty state is allowed only for the immediate idempotency case.
 
 On failure in phases 5 through 10, restoration runs in reverse target order. Existing files and modes are restored, newly created paths are removed when empty, and the previous manifest is restored. Restoration failures are accumulated and reported alongside the original failure; the core does not hide the first cause.
 
-The transaction records whether dependency declarations changed. An empty idempotent plan never calls pnpm.
+The transaction records whether dependency declarations changed. An empty
+idempotent plan never calls pnpm. A normalized v1 manifest uses the same backup
+and verification boundary to write only schema v2; verification failure
+restores the exact original manifest bytes.
 
 ## Manifest Service
 
-The manifest service validates input against the bundled JSON Schema before trusting paths or hashes. It rejects unknown schema versions and newer frontprep versions with an instruction to upgrade the CLI.
+The manifest service validates input against the bundled v1 and v2 JSON
+Schemas before trusting paths or hashes. It rejects unknown schema versions
+and newer frontprep versions with an instruction to upgrade the CLI. V1 is
+accepted only as migration input; every successful write uses v2.
 
-Serialization uses two-space indentation, LF line endings, a final newline, fixed top-level key order, sorted module keys, sorted paths, and sorted script keys. Hashes use SHA-256 over exact file bytes.
+Schema v2 records package/workspace roots, app, layout, stylesheet, utilities,
+test, and test-setup paths. Fingerprints are separated into `files.package`
+and `files.repository` so later workspace support can retain correct ownership.
+V1 migration derives utility and setup paths only from unambiguous managed
+records and preserves their existing locations.
+
+Serialization uses two-space indentation, LF line endings, a final newline,
+fixed top-level key order, sorted module keys, sorted scoped paths, and sorted
+script keys. Hashes use SHA-256 over exact file bytes.
 
 `.frontprep.json` records the manifest itself only through its schema and version; it does not include its own hash.
 
@@ -179,8 +222,12 @@ Core structural verification checks:
 Normal output is concise and deterministic:
 
 ```text
-frontprep 0.1.0-beta.0
+frontprep <version>
 ✓ Detected Next.js App Router with pnpm
+  App: src/app (src/app/layout.tsx)
+  Stylesheet: src/app/globals.css [detected, relative: ./globals.css]
+  Utilities: src/shared/lib [default]
+  Tests: src/test [default]
 ✓ quality
 ✓ tailwind
 ✓ test
