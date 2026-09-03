@@ -1,5 +1,5 @@
 import { lstat, readdir } from 'node:fs/promises'
-import { join, posix } from 'node:path'
+import { join } from 'node:path'
 
 import { intersects, validRange } from 'semver'
 
@@ -224,16 +224,6 @@ function verificationResult(
   })
 }
 
-function setupCandidates(context: ProjectContext): readonly string[] {
-  return Object.freeze(
-    ['test', 'tests'].map((path) =>
-      context.sourceDirectory === null
-        ? path
-        : posix.join(context.sourceDirectory, path),
-    ),
-  )
-}
-
 async function pathMetadata(
   root: string,
   path: string,
@@ -276,41 +266,57 @@ async function symbolicLinkComponent(
 }
 
 async function selectSetupDirectory(context: ProjectContext): Promise<string> {
-  const existing: string[] = []
-  for (const candidate of setupCandidates(context)) {
-    const linkedComponent = await symbolicLinkComponent(context.root, candidate)
-    if (linkedComponent !== null) {
-      throw new ConflictError(
-        `Test path contains a symbolic link: ${linkedComponent}.`,
-        linkedComponent,
-        MODULE_ID,
-      )
-    }
-    const metadata = await pathMetadata(context.root, candidate)
-    if (metadata === 'other') {
-      throw new ConflictError(
-        `Test path must be a real directory: ${candidate}.`,
-        candidate,
-        MODULE_ID,
-      )
-    }
-    if (metadata === 'directory') existing.push(candidate)
-  }
-  if (existing.length > 1) {
+  const path = context.layout.tests.path
+  const linkedComponent = await symbolicLinkComponent(context.root, path)
+  if (linkedComponent !== null) {
     throw new ConflictError(
-      `Multiple test directories were detected: ${existing.join(', ')}.`,
-      existing[0],
+      `Test path contains a symbolic link: ${linkedComponent}.`,
+      linkedComponent,
       MODULE_ID,
     )
   }
-  return existing[0] ?? setupCandidates(context)[0]!
+  if ((await pathMetadata(context.root, path)) === 'other') {
+    throw new ConflictError(
+      `Test path must be a real directory: ${path}.`,
+      path,
+      MODULE_ID,
+    )
+  }
+  return path
 }
 
-function createAnalysis(setupDirectory: string): TestAnalysis {
+function createAnalysis(
+  setupDirectory: string,
+  setupPath: string,
+): TestAnalysis {
   return Object.freeze({
     setupDirectory,
-    setupPath: posix.join(setupDirectory, 'setup.ts'),
+    setupPath,
   })
+}
+
+async function resolvedAnalysis(
+  context: ProjectContext,
+): Promise<TestAnalysis> {
+  const setupDirectory = await selectSetupDirectory(context)
+  const setupPath = context.layout.testSetupPath
+  const linkedComponent = await symbolicLinkComponent(context.root, setupPath)
+  if (linkedComponent !== null) {
+    throw new ConflictError(
+      `Test setup path contains a symbolic link: ${linkedComponent}.`,
+      linkedComponent,
+      MODULE_ID,
+    )
+  }
+  const metadata = await pathMetadata(context.root, setupPath)
+  if (metadata === 'directory') {
+    throw new ConflictError(
+      `Test setup path must be a regular file or missing: ${setupPath}.`,
+      setupPath,
+      MODULE_ID,
+    )
+  }
+  return createAnalysis(setupDirectory, setupPath)
 }
 
 function createIntents(analysis: TestAnalysis): readonly ChangeIntent[] {
@@ -352,9 +358,9 @@ function createIntents(analysis: TestAnalysis): readonly ChangeIntent[] {
 
 export const testModule: SetupModule<TestAnalysis> = Object.freeze({
   id: MODULE_ID,
-  version: '1.0.0',
+  version: '2.0.0',
   async analyze(context: ProjectContext): Promise<TestAnalysis> {
-    const analysis = createAnalysis(await selectSetupDirectory(context))
+    const analysis = await resolvedAnalysis(context)
     const conflicts = await configurationConflicts(context, analysis, true)
     const first = conflicts[0]
     if (first !== undefined) {
@@ -372,16 +378,19 @@ export const testModule: SetupModule<TestAnalysis> = Object.freeze({
     const issues: VerificationIssue[] = []
     let analysis: TestAnalysis
     try {
-      analysis = createAnalysis(await selectSetupDirectory(context))
+      analysis = await resolvedAnalysis(context)
     } catch (error) {
       issues.push({
         message:
           error instanceof Error
             ? error.message
             : 'Test setup path could not be verified.',
-        path: context.sourceDirectory ?? '.',
+        path: context.layout.tests.path,
       })
-      analysis = createAnalysis(setupCandidates(context)[0]!)
+      analysis = createAnalysis(
+        context.layout.tests.path,
+        context.layout.testSetupPath,
+      )
     }
     issues.push(...(await configurationConflicts(context, analysis, false)))
 
