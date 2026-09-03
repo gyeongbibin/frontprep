@@ -119,15 +119,6 @@ async function pathMetadata(
   }
 }
 
-function utilityCandidates(context: ProjectContext): readonly string[] {
-  const sourceRoot = context.sourceDirectory
-  return Object.freeze(
-    ['shared/utils', 'lib/utils', 'utils'].map((path) =>
-      sourceRoot === null ? path : posix.join(sourceRoot, path),
-    ),
-  )
-}
-
 async function symbolicLinkComponent(
   root: string,
   path: string,
@@ -173,32 +164,16 @@ async function assertNoSymbolicLinkComponents(
 async function selectUtilityDirectory(
   context: ProjectContext,
 ): Promise<string> {
-  const existing: string[] = []
-  for (const candidate of utilityCandidates(context)) {
-    await assertNoSymbolicLinkComponents(
-      context.root,
-      candidate,
-      'Utility path',
-    )
-    const metadata = await pathMetadata(context.root, candidate)
-    if (metadata === 'other') {
-      throw new ConflictError(
-        `Utility path must be a real directory: ${candidate}.`,
-        candidate,
-        MODULE_ID,
-      )
-    }
-    if (metadata === 'directory') existing.push(candidate)
-  }
-
-  if (existing.length > 1) {
+  const path = context.layout.utilities.path
+  await assertNoSymbolicLinkComponents(context.root, path, 'Utility path')
+  if ((await pathMetadata(context.root, path)) === 'other') {
     throw new ConflictError(
-      `Multiple utility directories were detected: ${existing.join(', ')}.`,
-      existing[0],
+      `Utility path must be a real directory: ${path}.`,
+      path,
       MODULE_ID,
     )
   }
-  return existing[0] ?? utilityCandidates(context)[0]!
+  return path
 }
 
 async function safeSnapshot(
@@ -441,11 +416,6 @@ async function assertManagedFileCompatible(
   }
 }
 
-function relativeImport(fromPath: string, toPath: string): string {
-  const value = posix.relative(posix.dirname(fromPath), toPath)
-  return value.startsWith('.') ? value : `./${value}`
-}
-
 function propertyArray(
   contents: string,
   property: string,
@@ -512,7 +482,7 @@ function declaredDependency(
 
 export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
   id: MODULE_ID,
-  version: '1.0.0',
+  version: '2.0.0',
 
   async analyze(context: ProjectContext): Promise<TailwindAnalysis> {
     const conflicts = await configurationConflicts(context)
@@ -601,7 +571,7 @@ export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
 
     return Object.freeze({
       layoutImportValue: context.stylesheetNeedsImport
-        ? relativeImport(context.layoutPath, context.stylesheetPath)
+        ? context.layout.stylesheet.importSpecifier
         : null,
       missingBarrelExports: barrelAnalysis.missing,
       stylesheetPath: context.stylesheetPath,
@@ -762,7 +732,11 @@ export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
 
     const layoutSnapshot = await safeSnapshot(fileSystem, context.layoutPath)
     try {
-      const refreshed = await detectProject(context.root)
+      const refreshed = await detectProject(context.root, {
+        stylesheet: context.layout.stylesheet.path,
+        testDirectory: context.layout.tests.path,
+        utilityDirectory: context.layout.utilities.path,
+      })
       if (
         layoutSnapshot === null ||
         !layoutSnapshot.exists ||
@@ -792,9 +766,9 @@ export const tailwindModule: SetupModule<TailwindAnalysis> = Object.freeze({
           error instanceof Error
             ? error.message
             : 'Utility directory could not be verified.',
-        path: context.sourceDirectory ?? '.',
+        path: context.layout.utilities.path,
       })
-      utilsDirectory = utilityCandidates(context)[0]!
+      utilsDirectory = context.layout.utilities.path
     }
 
     const cnPath = posix.join(utilsDirectory, 'cn.ts')
