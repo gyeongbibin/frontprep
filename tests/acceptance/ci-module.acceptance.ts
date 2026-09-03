@@ -301,8 +301,8 @@ describe('complete v1 compatibility', () => {
         ci: '1.0.0',
         'git-hooks': '1.0.0',
         quality: '1.0.0',
-        tailwind: '1.0.0',
-        test: '1.0.0',
+        tailwind: '2.0.0',
+        test: '2.0.0',
       })
       expect(
         manifest.files.repository['.github/workflows/ci.yml'],
