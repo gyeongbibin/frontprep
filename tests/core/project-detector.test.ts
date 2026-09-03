@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { writeManifest } from '../../src/core/manifest.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import { manifestV2 } from '../helpers/manifest.js'
-import { createProject } from '../helpers/project.js'
+import { createProject, createWorkspaceProject } from '../helpers/project.js'
 
 describe('project detector', () => {
   it('builds an immutable context for a supported project', async () => {
@@ -81,7 +81,7 @@ describe('project detector', () => {
   it('rejects package.json workspaces', async () => {
     const project = await createProject({ packageWorkspaces: ['packages/*'] })
     await expect(detectProject(project.root)).rejects.toThrow(
-      'single application repository',
+      'cannot contain nested workspaces',
     )
   })
 
@@ -129,5 +129,17 @@ describe('project detector', () => {
     await expect(detectProject(project.root)).rejects.toThrow(
       'single application repository',
     )
+  })
+
+  it('detects one explicitly selected pnpm workspace package', async () => {
+    const project = await createWorkspaceProject()
+
+    await expect(detectProject(project.packageRoot)).resolves.toMatchObject({
+      packageDirectory: 'apps/web',
+      packageRoot: expect.stringContaining('/apps/web'),
+      repositoryRoot: expect.not.stringContaining('/apps/web'),
+      root: expect.stringContaining('/apps/web'),
+      workspaceRoot: expect.not.stringContaining('/apps/web'),
+    })
   })
 })

@@ -107,6 +107,7 @@ export interface ProjectContext {
   layoutPath: ProjectPath
   manifest: FrontprepManifest | null
   manifestNeedsMigration: boolean
+  packageDirectory: ProjectPath | '.'
   packageRoot: string
   packageJson: PackageJson
   packageJsonPath: string

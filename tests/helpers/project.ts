@@ -88,3 +88,70 @@ export async function createProject(
 
   return { root }
 }
+
+export async function createWorkspaceProject(): Promise<{
+  packageRoot: string
+  repositoryRoot: string
+}> {
+  const repositoryRoot = await mkdtemp(join(tmpdir(), 'frontprep-workspace-'))
+  const packageRoot = join(repositoryRoot, 'apps/web')
+  await writeProjectFile(
+    repositoryRoot,
+    'package.json',
+    `${JSON.stringify(
+      {
+        name: 'workspace-root',
+        private: true,
+        packageManager: 'pnpm@10.22.0',
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  await writeProjectFile(
+    repositoryRoot,
+    'pnpm-workspace.yaml',
+    "packages:\n  - 'apps/*'\n",
+  )
+  await writeProjectFile(
+    packageRoot,
+    'package.json',
+    `${JSON.stringify(
+      {
+        name: 'web',
+        private: true,
+        dependencies: {
+          next: '16.3.2',
+          react: '19.2.0',
+          typescript: '^5.9.0',
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  )
+  await writeProjectFile(
+    packageRoot,
+    'tsconfig.json',
+    '{"compilerOptions":{"strict":true}}\n',
+  )
+  await writeProjectFile(
+    packageRoot,
+    'src/app/layout.tsx',
+    "import './globals.css'\nexport default function Layout() { return null }\n",
+  )
+  await writeProjectFile(packageRoot, 'src/app/globals.css', 'body {}\n')
+
+  await execFileAsync('git', ['init'], { cwd: repositoryRoot })
+  await execFileAsync('git', ['config', 'user.email', 'fixture@example.com'], {
+    cwd: repositoryRoot,
+  })
+  await execFileAsync('git', ['config', 'user.name', 'Fixture'], {
+    cwd: repositoryRoot,
+  })
+  await execFileAsync('git', ['add', '--all'], { cwd: repositoryRoot })
+  await execFileAsync('git', ['commit', '-m', 'fixture'], {
+    cwd: repositoryRoot,
+  })
+  return { packageRoot, repositoryRoot }
+}

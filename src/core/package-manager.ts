@@ -7,6 +7,10 @@ export interface ProcessService {
   run: ProcessRunner['run']
 }
 
+export interface WorkspaceInstallOptions {
+  readonly packageDirectory: string
+}
+
 const TRUSTED_BUILD_DEPENDENCIES = ['esbuild'] as const
 
 function unsupportedPnpm(version: string): FrontprepError {
@@ -35,14 +39,23 @@ export class PnpmPackageManager {
     }
   }
 
-  async install(root: string, signal?: AbortSignal): Promise<void> {
-    await this.runner.run('pnpm', ['install', '--ignore-scripts'], {
+  async install(
+    root: string,
+    signal?: AbortSignal,
+    options?: WorkspaceInstallOptions,
+  ): Promise<void> {
+    const filter =
+      options === undefined
+        ? []
+        : ['--filter', `./${options.packageDirectory}`, '--fail-if-no-match']
+    await this.runner.run('pnpm', [...filter, 'install', '--ignore-scripts'], {
       cwd: root,
       signal,
     })
-    await this.runner.run('pnpm', ['rebuild', ...TRUSTED_BUILD_DEPENDENCIES], {
-      cwd: root,
-      signal,
-    })
+    await this.runner.run(
+      'pnpm',
+      [...filter, 'rebuild', ...TRUSTED_BUILD_DEPENDENCIES],
+      { cwd: root, signal },
+    )
   }
 }

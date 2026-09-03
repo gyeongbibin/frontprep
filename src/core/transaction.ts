@@ -33,7 +33,11 @@ const FRONTPREP_MANIFEST_TARGET = scopedProjectPath(MANIFEST_PATH)
 
 export interface PackageManagerService {
   assertSupported(root: string, signal?: AbortSignal): Promise<void>
-  install(root: string, signal?: AbortSignal): Promise<void>
+  install(
+    root: string,
+    signal?: AbortSignal,
+    options?: { readonly packageDirectory: string },
+  ): Promise<void>
 }
 
 export interface TransactionServices {
@@ -257,7 +261,7 @@ function createManifest(
       test: context.layout.tests.path,
       testSetup,
     },
-    roots: { package: '.', workspace: '.' },
+    roots: { package: context.packageDirectory, workspace: '.' },
     modules,
     files,
     managedScripts,
@@ -306,8 +310,17 @@ export async function applyPlan(
     }
 
     if (plan.dependenciesChanged) {
-      await packageManager.assertSupported(context.root, services.signal)
-      await packageManager.install(context.root, services.signal)
+      await packageManager.assertSupported(
+        context.workspaceRoot,
+        services.signal,
+      )
+      await packageManager.install(
+        context.workspaceRoot,
+        services.signal,
+        context.packageDirectory === '.'
+          ? undefined
+          : { packageDirectory: context.packageDirectory },
+      )
     }
     if (services.activateGitHooks === true && plan.operations.length > 0) {
       gitHooksActivation = await gitHooks.activate(

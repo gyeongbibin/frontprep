@@ -74,4 +74,24 @@ describe('PnpmPackageManager', () => {
       },
     ])
   })
+
+  it('filters installation to the selected workspace directory', async () => {
+    const runner = new RecordingRunner('')
+    const packageManager = new PnpmPackageManager(runner)
+
+    await packageManager.install('/repo', undefined, {
+      packageDirectory: 'apps/web',
+    })
+
+    expect(runner.calls.map(({ args }) => args)).toEqual([
+      [
+        '--filter',
+        './apps/web',
+        '--fail-if-no-match',
+        'install',
+        '--ignore-scripts',
+      ],
+      ['--filter', './apps/web', '--fail-if-no-match', 'rebuild', 'esbuild'],
+    ])
+  })
 })
