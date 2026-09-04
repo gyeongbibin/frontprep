@@ -31,8 +31,21 @@ or rolled back safely. Commit or stash existing work before running it.
 - one application at the Git repository root
 - either `app/` or `src/app/`
 
-Workspaces, the Pages Router, JavaScript-only projects, and package managers
-other than pnpm are outside the v1 scope.
+All-package workspace initialization, the Pages Router, JavaScript-only
+projects, and package managers other than pnpm are outside the v1 scope.
+
+One explicit Next.js package in a pnpm workspace is supported by pointing
+`--cwd` at its package directory:
+
+```sh
+pnpm dlx @mingyeongbin/frontprep@beta init --cwd apps/web
+pnpm dlx @mingyeongbin/frontprep@beta check --cwd apps/web
+```
+
+The repository root must own `pnpm-workspace.yaml`, the pnpm 10 declaration,
+and the shared lockfile. Frontprep configures only the selected package while
+placing its workflow at the repository root. Beta support is limited to one
+managed package per repository.
 
 ## Commands
 

@@ -298,8 +298,8 @@ describe('complete v1 compatibility', () => {
         await readFile(join(project.root, '.frontprep.json'), 'utf8'),
       ) as FrontprepManifest
       expect(manifest.modules).toEqual({
-        ci: '1.0.0',
-        'git-hooks': '1.0.0',
+        ci: '2.0.0',
+        'git-hooks': '2.0.0',
         quality: '1.0.0',
         tailwind: '2.0.0',
         test: '2.0.0',
