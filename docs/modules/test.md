@@ -62,9 +62,16 @@ their managed setup path preserved. See the
 [project model v2 design](../superpowers/specs/2026-09-02-project-model-v2-design.md)
 for the complete path authority contract.
 
-This module intentionally retains Vitest's current discovery behavior.
-Application-only discovery is delivered separately by the
-`fix/test-discovery` change.
+Test discovery is limited to the detected application source root and the
+resolved test directory. A `src/app` project therefore searches `src`; a root
+`app` project searches `app` plus `test` unless the selected test directory is
+already below the application root. An explicit directory outside the source
+root is included without widening discovery to the rest of the package.
+
+Every discovery root uses
+`**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}`. Vitest's default exclusions
+remain active and `fixtures` plus `__fixtures__` directories are excluded, so
+sample tests cannot be collected as application tests.
 
 ## Managed Files
 
@@ -75,13 +82,15 @@ the detected directory:
 
 ```ts
 import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [tsconfigPaths(), react()],
   test: {
     environment: 'jsdom',
+    exclude: [...configDefaults.exclude, '**/{__fixtures__,fixtures}/**'],
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     passWithNoTests: true,
     setupFiles: ['./src/test/setup.ts'],
   },
@@ -98,6 +107,10 @@ shapes. A dedicated Vitest config also overrides and isolates any unrelated
 The config does not enable Vitest globals. Test files import `test`, `expect`,
 and hooks explicitly from `vitest`, matching the Next.js example and avoiding
 a `tsconfig.json` mutation for `vitest/globals`.
+
+The Test module contract version is `3.0.0`. Existing unchanged managed
+configurations are rewritten transactionally to gain scoped discovery; an
+unowned differing configuration remains a planning conflict.
 
 ### `<detected-test-directory>/setup.ts`
 
@@ -194,7 +207,9 @@ failure. It checks:
    path without ambiguity or symbolic links;
 4. `vitest.config.mts` has the canonical path-aware bytes and mode;
 5. the detected setup file has the canonical bytes and mode;
-6. no alternate Vitest workspace, Jest, package-level, dependency, symbolic-
+6. discovery includes only the application and selected centralized test roots
+   while retaining the canonical default and fixture exclusions;
+7. no alternate Vitest workspace, Jest, package-level, dependency, symbolic-
    link, or path ambiguity conflict appeared after installation.
 
 Per-path filesystem and parse failures become verification issues and checking

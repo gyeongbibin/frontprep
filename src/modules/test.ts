@@ -65,15 +65,45 @@ export interface TestAnalysis {
   readonly setupPath: string
 }
 
-function renderVitestConfig(setupPath: string): string {
+const TEST_FILE_GLOB =
+  '**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}' as const
+
+function discoveryRoots(context: ProjectContext): readonly string[] {
+  const applicationRoot =
+    context.layout.sourceDirectory ?? context.layout.appDirectory
+  const roots: string[] = []
+  for (const candidate of [applicationRoot, context.layout.tests.path]) {
+    if (
+      roots.some(
+        (root) => candidate === root || candidate.startsWith(`${root}/`),
+      )
+    ) {
+      continue
+    }
+    roots.push(candidate)
+  }
+  return Object.freeze(roots)
+}
+
+function renderVitestConfig(
+  context: ProjectContext,
+  setupPath: string,
+): string {
+  const includes = discoveryRoots(context)
+    .map((root) => `      '${root}/${TEST_FILE_GLOB}',`)
+    .join('\n')
   return `import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [tsconfigPaths(), react()],
   test: {
     environment: 'jsdom',
+    exclude: [...configDefaults.exclude, '**/{__fixtures__,fixtures}/**'],
+    include: [
+${includes}
+    ],
     passWithNoTests: true,
     setupFiles: ['./${setupPath}'],
   },
@@ -166,7 +196,7 @@ async function configurationConflicts(
       [
         'vitest.config.mts',
         'Vitest configuration',
-        renderVitestConfig(analysis.setupPath),
+        renderVitestConfig(context, analysis.setupPath),
       ],
       [analysis.setupPath, 'Test setup', TEST_SETUP],
     ] as const) {
@@ -319,7 +349,10 @@ async function resolvedAnalysis(
   return createAnalysis(setupDirectory, setupPath)
 }
 
-function createIntents(analysis: TestAnalysis): readonly ChangeIntent[] {
+function createIntents(
+  context: ProjectContext,
+  analysis: TestAnalysis,
+): readonly ChangeIntent[] {
   return Object.freeze([
     ...DEVELOPMENT_DEPENDENCIES.map(([name, range]) =>
       dependencyIntent(
@@ -342,7 +375,7 @@ function createIntents(analysis: TestAnalysis): readonly ChangeIntent[] {
     managedFileIntent(
       MODULE_ID,
       'vitest.config.mts',
-      renderVitestConfig(analysis.setupPath),
+      renderVitestConfig(context, analysis.setupPath),
       0o644,
       'Test owns the Vitest configuration.',
     ),
@@ -358,7 +391,7 @@ function createIntents(analysis: TestAnalysis): readonly ChangeIntent[] {
 
 export const testModule: SetupModule<TestAnalysis> = Object.freeze({
   id: MODULE_ID,
-  version: '2.0.0',
+  version: '3.0.0',
   async analyze(context: ProjectContext): Promise<TestAnalysis> {
     const analysis = await resolvedAnalysis(context)
     const conflicts = await configurationConflicts(context, analysis, true)
@@ -369,10 +402,10 @@ export const testModule: SetupModule<TestAnalysis> = Object.freeze({
     return analysis
   },
   async plan(
-    _context: ProjectContext,
+    context: ProjectContext,
     analysis: TestAnalysis,
   ): Promise<readonly ChangeIntent[]> {
-    return createIntents(analysis)
+    return createIntents(context, analysis)
   },
   async verify(context: ProjectContext): Promise<VerificationResult> {
     const issues: VerificationIssue[] = []
@@ -435,7 +468,7 @@ export const testModule: SetupModule<TestAnalysis> = Object.freeze({
     for (const [path, expected, message] of [
       [
         'vitest.config.mts',
-        renderVitestConfig(analysis.setupPath),
+        renderVitestConfig(context, analysis.setupPath),
         'Managed Vitest configuration is missing or changed.',
       ],
       [

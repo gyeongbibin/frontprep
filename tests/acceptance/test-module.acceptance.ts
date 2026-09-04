@@ -108,6 +108,27 @@ describe('Greeting', () => {
 `,
         'utf8',
       )
+      await writeFile(
+        join(project.root, 'src/components/value.test.ts'),
+        `import { expect, it } from 'vitest'
+
+it('collects colocated application tests', () => {
+  expect(1 + 1).toBe(2)
+})
+`,
+        'utf8',
+      )
+      await mkdir(join(project.root, 'src/fixtures'), { recursive: true })
+      await writeFile(
+        join(project.root, 'src/fixtures/ignored.test.ts'),
+        `import { it } from 'vitest'
+
+it('does not collect fixtures', () => {
+  throw new Error('fixture test must be excluded')
+})
+`,
+        'utf8',
+      )
 
       const updated = await detectProject(project.root)
       await expect(testModule.verify(updated)).resolves.toEqual({
@@ -141,11 +162,7 @@ describe('Greeting', () => {
 
       const { stdout } = await execFileAsync(
         minimumNode,
-        [
-          join(project.root, 'node_modules/vitest/vitest.mjs'),
-          'run',
-          'src/test/greeting.test.tsx',
-        ],
+        [join(project.root, 'node_modules/vitest/vitest.mjs'), 'run'],
         {
           cwd: project.root,
           encoding: 'utf8',
@@ -153,7 +170,7 @@ describe('Greeting', () => {
           timeout: 120_000,
         },
       )
-      expect(stdout).toMatch(/1 passed/u)
+      expect(stdout).toMatch(/2 passed/u)
     } finally {
       await rm(project.root, { force: true, recursive: true })
     }
