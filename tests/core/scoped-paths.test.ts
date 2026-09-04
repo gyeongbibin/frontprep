@@ -26,4 +26,15 @@ describe('scoped project paths', () => {
 
     expect(Object.isFrozen(scopedProjectPath('package.json'))).toBe(true)
   })
+
+  it('maps package and repository scopes to distinct context roots', async () => {
+    const { rootForScope } = await import('../../src/core/scoped-paths.js')
+    const context = {
+      packageRoot: '/repo/apps/web',
+      repositoryRoot: '/repo',
+    } as never
+
+    expect(rootForScope(context, 'package')).toBe('/repo/apps/web')
+    expect(rootForScope(context, 'repository')).toBe('/repo')
+  })
 })

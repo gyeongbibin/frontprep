@@ -26,10 +26,9 @@ export function scopedPathKey(target: ScopedProjectPath): string {
 
 export function rootForScope(
   context: ProjectContext,
-  _scope: FileScope,
+  scope: FileScope,
 ): string {
-  void _scope
-  return context.root
+  return scope === 'package' ? context.packageRoot : context.repositoryRoot
 }
 
 export function manifestFile(

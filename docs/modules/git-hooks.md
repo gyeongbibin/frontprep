@@ -3,7 +3,7 @@
 ## Role
 
 The Git Hooks module installs and activates a deterministic commit-time
-quality gate for a single-package Frontprep project. It implements the Git
+quality gate for a standalone or explicitly selected workspace package. It implements the Git
 Hooks responsibility from the
 [Frontprep v1 design](../superpowers/specs/2026-08-22-frontprep-v1-design.md)
 through the intent, transaction, and verification contracts defined by the
@@ -14,9 +14,12 @@ commit, then validates the commit message against Conventional Commits. It
 does not run the full typecheck, test, or build pipeline in a hook. Those
 project-wide checks remain under `frontprep:check` and the CI module.
 
-All managed hook and configuration paths are relative to the detected Git and
-package root. They do not depend on whether the Next.js application uses
-`app/` or `src/app/`.
+All managed hook and configuration files remain relative to the selected
+package. In a workspace, activation runs at the repository root and records
+`<package-directory>/.husky/_` in Git configuration. Generated hooks invoke
+pnpm with `--dir <package-directory>` so lint-staged and commitlint use the
+selected package's configuration. See the
+[workspace target design](../superpowers/specs/2026-09-03-workspace-target-design.md).
 
 ## Dependency Compatibility
 

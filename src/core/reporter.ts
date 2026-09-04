@@ -34,6 +34,9 @@ export class Reporter {
   detected(context: ProjectContext): void {
     this.status('Detected Next.js App Router with pnpm')
     const { layout } = context
+    if (context.packageDirectory !== '.') {
+      this.stdout.write(`  Package: ${context.packageDirectory}\n`)
+    }
     this.stdout.write(`  App: ${layout.appDirectory} (${layout.layoutPath})\n`)
     this.stdout.write(
       `  Stylesheet: ${layout.stylesheet.path} [${layout.stylesheet.source}, ${layout.stylesheet.importKind}: ${layout.stylesheet.importSpecifier}]\n`,

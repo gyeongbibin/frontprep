@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { lstat, readFile, realpath } from 'node:fs/promises'
-import { join, posix } from 'node:path'
+import { isAbsolute, join, posix, relative, sep } from 'node:path'
 import { promisify } from 'node:util'
 
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
@@ -95,6 +95,113 @@ async function assertSinglePackageWorkspace(root: string): Promise<void> {
       error,
     )
   }
+}
+
+interface ListedWorkspacePackage {
+  readonly path?: string
+}
+
+function toPosixPath(value: string): string {
+  return value.split(sep).join('/')
+}
+
+async function listedPackages(
+  repositoryRoot: string,
+  args: readonly string[],
+): Promise<readonly ListedWorkspacePackage[]> {
+  try {
+    const result = await execFileAsync(
+      'pnpm',
+      [
+        '--dir',
+        repositoryRoot,
+        ...args,
+        'list',
+        '--recursive',
+        '--depth',
+        '-1',
+        '--json',
+      ],
+      { cwd: repositoryRoot, encoding: 'utf8' },
+    )
+    const value = JSON.parse(result.stdout) as unknown
+    if (!Array.isArray(value)) throw new Error('expected an array')
+    return value as ListedWorkspacePackage[]
+  } catch (error) {
+    throw new UnsupportedProjectError(
+      'The selected --cwd is not a resolvable pnpm workspace package.',
+      'Add the package to pnpm-workspace.yaml or select its exact directory with --cwd.',
+      error,
+    )
+  }
+}
+
+async function workspacePackageManager(
+  repositoryRoot: string,
+  packageRoot: string,
+  packageDirectory: ProjectPath,
+): Promise<PackageJson> {
+  let workspace: { packages?: unknown } | null
+  let rootPackageJson: PackageJson
+  try {
+    workspace = parseYaml(
+      await readFile(join(repositoryRoot, 'pnpm-workspace.yaml'), 'utf8'),
+    ) as { packages?: unknown } | null
+    rootPackageJson = parseJson<PackageJson>(
+      await readFile(join(repositoryRoot, 'package.json'), 'utf8'),
+      'workspace package.json',
+    )
+  } catch (error) {
+    if (error instanceof UnsupportedProjectError) throw error
+    throw new UnsupportedProjectError(
+      'A nested --cwd requires repository-root package.json and pnpm-workspace.yaml.',
+      'Create the pnpm workspace files or select a standalone Git root.',
+      error,
+    )
+  }
+  if (!Array.isArray(workspace?.packages) || workspace.packages.length === 0) {
+    throw new UnsupportedProjectError(
+      'pnpm-workspace.yaml must declare the selected workspace package.',
+      'Add the package directory to pnpm-workspace.yaml.',
+    )
+  }
+
+  const selected = await listedPackages(repositoryRoot, [
+    '--filter',
+    `./${packageDirectory}`,
+    '--fail-if-no-match',
+  ])
+  const selectedRoots = await Promise.all(
+    selected.flatMap(({ path }) =>
+      typeof path === 'string' ? [realpath(path)] : [],
+    ),
+  )
+  if (selectedRoots.length !== 1 || selectedRoots[0] !== packageRoot) {
+    throw new UnsupportedProjectError(
+      `pnpm did not resolve --cwd ${packageDirectory} to exactly one package.`,
+      'Select the exact package directory and check pnpm-workspace.yaml.',
+    )
+  }
+
+  const allPackages = await listedPackages(repositoryRoot, [])
+  for (const listed of allPackages) {
+    if (typeof listed.path !== 'string') continue
+    const listedRoot = await realpath(listed.path)
+    if (listedRoot === packageRoot) continue
+    try {
+      const metadata = await lstat(join(listedRoot, '.frontprep.json'))
+      if (metadata.isFile() || metadata.isSymbolicLink()) {
+        throw new UnsupportedProjectError(
+          `Another workspace package is already managed by Frontprep: ${toPosixPath(relative(repositoryRoot, listedRoot))}.`,
+          'Frontprep beta supports one managed workspace package per repository.',
+        )
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
+    }
+  }
+  return rootPackageJson
 }
 
 function selectedPath(
@@ -224,21 +331,28 @@ export async function detectProject(
       error,
     )
   }
-  if (gitRoot !== root) {
+  const rawPackageDirectory = toPosixPath(relative(gitRoot, root))
+  if (isAbsolute(rawPackageDirectory) || rawPackageDirectory.startsWith('..')) {
     throw new UnsupportedProjectError(
-      'The package root must match the Git worktree root.',
+      'The selected package must be inside the Git worktree root.',
     )
   }
+  const packageDirectory =
+    rawPackageDirectory === '' ? '.' : toProjectPath(rawPackageDirectory)
+  const packageManagerOwner =
+    packageDirectory === '.'
+      ? packageJson
+      : await workspacePackageManager(gitRoot, root, packageDirectory)
 
   const packageManagerMatch =
     /^pnpm@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/u.exec(
-      packageJson.packageManager ?? '',
+      packageManagerOwner.packageManager ?? '',
     )
   if (
     packageManagerMatch?.[1] === undefined ||
     minVersion(packageManagerMatch[1])?.major !== 10
   ) {
-    throw new UnsupportedProjectError('Frontprep v1 requires pnpm 10.')
+    throw new UnsupportedProjectError('Frontprep requires pnpm 10.')
   }
 
   assertMajorVersion(directDependency(packageJson, 'next'), 16, 'Next.js 16')
@@ -249,10 +363,10 @@ export async function detectProject(
   )
   if (hasPackageWorkspaces(packageJson)) {
     throw new UnsupportedProjectError(
-      'Frontprep v1 requires a single application repository.',
+      'The selected application package cannot contain nested workspaces.',
     )
   }
-  await assertSinglePackageWorkspace(root)
+  if (packageDirectory === '.') await assertSinglePackageWorkspace(root)
 
   const persisted = await loadPersistedManifest(root)
   const app = await detectNextApp(root, {
@@ -273,6 +387,16 @@ export async function detectProject(
     throw new UnsupportedProjectError(
       'The App Router root does not match .frontprep.json.',
       'Restore the recorded layout or remove the stale manifest before continuing.',
+    )
+  }
+  if (
+    manifest !== null &&
+    (manifest.roots.package !== packageDirectory ||
+      manifest.roots.workspace !== '.')
+  ) {
+    throw new UnsupportedProjectError(
+      'The selected package root does not match .frontprep.json.',
+      'Run with the recorded --cwd or remove the stale manifest.',
     )
   }
 
@@ -317,12 +441,13 @@ export async function detectProject(
     layout,
     manifest,
     manifestNeedsMigration: normalized.needsMigration,
+    packageDirectory,
     packageJson,
     packageJsonPath,
     packageManager: { name: 'pnpm', version: packageManagerMatch[1] },
     packageRoot: root,
-    repositoryRoot: root,
+    repositoryRoot: gitRoot,
     root,
-    workspaceRoot: root,
+    workspaceRoot: gitRoot,
   })
 }

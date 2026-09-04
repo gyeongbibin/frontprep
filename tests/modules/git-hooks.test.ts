@@ -13,7 +13,7 @@ import { qualityModule } from '../../src/modules/quality.js'
 import { tailwindModule } from '../../src/modules/tailwind.js'
 import { testModule } from '../../src/modules/test.js'
 import { manifestV2 } from '../helpers/manifest.js'
-import { createProject } from '../helpers/project.js'
+import { createProject, createWorkspaceProject } from '../helpers/project.js'
 
 const EXPECTED_DEPENDENCIES = {
   '@commitlint/cli': '^21.2.0',
@@ -159,6 +159,38 @@ describe('git hooks module plan', () => {
       },
     ])
   })
+
+  it('renders package-relative commands for a workspace target', async () => {
+    const project = await createWorkspaceProject()
+    const context = await detectProject(project.packageRoot)
+    const analysis = await gitHooksModule.analyze(context)
+    const intents = await gitHooksModule.plan(context, analysis)
+
+    expect(
+      intents.find(
+        (intent) =>
+          intent.kind === 'script' && intent.name === 'frontprep:prepare',
+      ),
+    ).toMatchObject({ command: 'cd ../.. && husky apps/web/.husky' })
+    expect(
+      intents.find(
+        (intent) =>
+          intent.kind === 'executable-file' &&
+          intent.path === '.husky/pre-commit',
+      ),
+    ).toMatchObject({
+      content: 'pnpm --dir apps/web exec lint-staged\n',
+    })
+    expect(
+      intents.find(
+        (intent) =>
+          intent.kind === 'executable-file' &&
+          intent.path === '.husky/commit-msg',
+      ),
+    ).toMatchObject({
+      content: 'pnpm --dir apps/web exec commitlint --edit "$1"\n',
+    })
+  }, 30_000)
 
   it.each([
     'husky',

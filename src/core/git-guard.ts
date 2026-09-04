@@ -6,7 +6,7 @@ import { MANIFEST_PATH, serializeManifest } from './manifest.js'
 import { resolveProjectPath, toProjectPath, type ProjectPath } from './paths.js'
 import { ProcessRunner } from './process.js'
 import { rootForScope, type FileScope } from './scoped-paths.js'
-import type { ProjectContext } from './types.js'
+import type { ManifestFile, ProjectContext } from './types.js'
 
 interface GitStatusEntry {
   originalPath?: string
@@ -90,57 +90,90 @@ async function assertNotSubmodule(
 
 async function assertManifestPath(
   context: ProjectContext,
-  path: ProjectPath,
+  repositoryPath: ProjectPath,
 ): Promise<void> {
-  if (path === MANIFEST_PATH) {
-    const fileSystem = new FileSystem(context.root)
-    const bytes = await fileSystem.read(path)
+  const manifestPath = toProjectPath(
+    context.packageDirectory === '.'
+      ? MANIFEST_PATH
+      : `${context.packageDirectory}/${MANIFEST_PATH}`,
+  )
+  if (repositoryPath === manifestPath) {
+    const fileSystem = new FileSystem(context.packageRoot)
+    const bytes = await fileSystem.read(toProjectPath(MANIFEST_PATH))
     if (
       bytes === null ||
       bytes.toString('utf8') !== serializeManifest(context.manifest!)
     ) {
       throw unsafeGitState(
         'The dirty .frontprep.json is not in canonical form.',
-        path,
+        repositoryPath,
       )
     }
     return
   }
 
-  const candidates = (
-    ['package', 'repository'] as const satisfies readonly FileScope[]
-  ).flatMap((scope) => {
-    const recorded = context.manifest!.files[scope][path]
-    return recorded === undefined ? [] : [{ recorded, scope }]
-  })
+  const packagePrefix =
+    context.packageDirectory === '.' ? '' : `${context.packageDirectory}/`
+  const packagePath = repositoryPath.startsWith(packagePrefix)
+    ? toProjectPath(repositoryPath.slice(packagePrefix.length))
+    : null
+  const candidates: Array<{
+    path: ProjectPath
+    recorded: ManifestFile
+    scope: FileScope
+  }> = []
+  const repositoryRecord = context.manifest!.files.repository[repositoryPath]
+  if (repositoryRecord !== undefined) {
+    candidates.push({
+      path: repositoryPath,
+      recorded: repositoryRecord,
+      scope: 'repository' as const,
+    })
+  }
+  if (packagePath !== null) {
+    const packageRecord = context.manifest!.files.package[packagePath]
+    if (packageRecord !== undefined) {
+      candidates.push({
+        path: packagePath,
+        recorded: packageRecord,
+        scope: 'package' as const,
+      })
+    }
+  }
   if (candidates.length === 0) {
-    throw unsafeGitState(`Git path is not authorized: ${path}`, path)
+    throw unsafeGitState(
+      `Git path is not authorized: ${repositoryPath}`,
+      repositoryPath,
+    )
   }
 
   try {
     const matching = []
     for (const candidate of candidates) {
       const fileSystem = new FileSystem(rootForScope(context, candidate.scope))
-      const snapshot = await fileSystem.snapshot(path)
+      const snapshot = await fileSystem.snapshot(candidate.path)
       if (snapshot.exists && snapshot.hash === candidate.recorded.hash) {
         matching.push(candidate)
       }
     }
     if (matching.length > 1) {
       throw unsafeGitState(
-        `Git path has multiple manifest records: ${path}`,
-        path,
+        `Git path has multiple manifest records: ${repositoryPath}`,
+        repositoryPath,
       )
     }
     if (matching.length !== 1) {
       throw unsafeGitState(
-        `Git path does not match its manifest fingerprint: ${path}`,
-        path,
+        `Git path does not match its manifest fingerprint: ${repositoryPath}`,
+        repositoryPath,
       )
     }
   } catch (error) {
     if (error instanceof FrontprepError) throw error
-    throw unsafeGitState(`Git submodule or unsafe path is dirty: ${path}`, path)
+    throw unsafeGitState(
+      `Git submodule or unsafe path is dirty: ${repositoryPath}`,
+      repositoryPath,
+    )
   }
 }
 
@@ -151,14 +184,14 @@ export async function assertSafeGitState(
   const { stdout } = await runner.run(
     'git',
     ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
-    { cwd: context.root },
+    { cwd: context.repositoryRoot },
   )
   const entries = parseGitStatus(stdout)
   if (entries.length === 0) return
 
   for (const entry of entries) {
     assertOrdinaryStatus(entry)
-    await assertNotSubmodule(context.root, entry)
+    await assertNotSubmodule(context.repositoryRoot, entry)
   }
 
   if (context.manifest === null) {

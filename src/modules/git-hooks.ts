@@ -47,23 +47,6 @@ const COMMITLINT_CONFIG = `export default {
 }
 `
 
-const CANONICAL_FILES = Object.freeze([
-  ['.husky/pre-commit', PRE_COMMIT, 0o755, 'pre-commit hook'],
-  ['.husky/commit-msg', COMMIT_MSG, 0o755, 'commit-msg hook'],
-  [
-    'lint-staged.config.mjs',
-    LINT_STAGED_CONFIG,
-    0o644,
-    'lint-staged configuration',
-  ],
-  [
-    'commitlint.config.mjs',
-    COMMITLINT_CONFIG,
-    0o644,
-    'commitlint configuration',
-  ],
-] as const)
-
 const COMPETING_DEPENDENCIES = Object.freeze([
   '@evilmartians/lefthook',
   'lefthook',
@@ -150,10 +133,68 @@ function declaredDependency(
   )
 }
 
-function recognizedPrepareStages(command: string | undefined): string[] {
+function workspaceCommands(context: ProjectContext): {
+  commitMsg: string
+  hooksPath: string
+  preCommit: string
+  prepare: string
+} {
+  if (context.packageDirectory === '.') {
+    return {
+      commitMsg: COMMIT_MSG,
+      hooksPath: '.husky/_',
+      preCommit: PRE_COMMIT,
+      prepare: 'husky',
+    }
+  }
+  if (!/^[A-Za-z0-9._/-]+$/u.test(context.packageDirectory)) {
+    throw new ConflictError(
+      `Workspace package directory cannot be rendered safely in hook commands: ${context.packageDirectory}.`,
+      'package.json',
+      MODULE_ID,
+    )
+  }
+  const upward = context.packageDirectory
+    .split('/')
+    .map(() => '..')
+    .join('/')
+  return {
+    commitMsg: `pnpm --dir ${context.packageDirectory} exec commitlint --edit "$1"\n`,
+    hooksPath: `${context.packageDirectory}/.husky/_`,
+    preCommit: `pnpm --dir ${context.packageDirectory} exec lint-staged\n`,
+    prepare: `cd ${upward} && husky ${context.packageDirectory}/.husky`,
+  }
+}
+
+function canonicalFiles(context: ProjectContext) {
+  const commands = workspaceCommands(context)
+  return Object.freeze([
+    ['.husky/pre-commit', commands.preCommit, 0o755, 'pre-commit hook'],
+    ['.husky/commit-msg', commands.commitMsg, 0o755, 'commit-msg hook'],
+    [
+      'lint-staged.config.mjs',
+      LINT_STAGED_CONFIG,
+      0o644,
+      'lint-staged configuration',
+    ],
+    [
+      'commitlint.config.mjs',
+      COMMITLINT_CONFIG,
+      0o644,
+      'commitlint configuration',
+    ],
+  ] as const)
+}
+
+function recognizedPrepareStages(
+  context: ProjectContext,
+  command: string | undefined,
+): string[] {
+  const recognized = new Set(RECOGNIZED_PREPARE_STAGES)
+  recognized.add(workspaceCommands(context).prepare)
   return (command?.split('&&') ?? [])
     .map((stage) => stage.trim())
-    .filter((stage) => RECOGNIZED_PREPARE_STAGES.has(stage))
+    .filter((stage) => recognized.has(stage))
 }
 
 function isLintStagedConfig(name: string): boolean {
@@ -184,7 +225,7 @@ async function canonicalOwnershipIssues(
 ): Promise<readonly VerificationIssue[]> {
   const issues: VerificationIssue[] = []
   const fileSystem = new FileSystem(context.root)
-  for (const [path, contents, mode, label] of CANONICAL_FILES) {
+  for (const [path, contents, mode, label] of canonicalFiles(context)) {
     if (path.includes('/')) {
       const parent = path.slice(0, path.lastIndexOf('/'))
       try {
@@ -349,24 +390,29 @@ async function gitConfigurationIssues(
   const issues: VerificationIssue[] = []
   let hooksPath: string | null
   try {
-    hooksPath = await readLocalHooksPath(context.root)
+    hooksPath = await readLocalHooksPath(context.repositoryRoot)
   } catch {
     return Object.freeze([
       issue('Git core.hooksPath could not be inspected.', '.git/config'),
     ])
   }
-  if (hooksPath !== null && hooksPath !== '.husky/_') {
-    issues.push(issue('Git core.hooksPath must be .husky/_.', '.git/config'))
+  const expectedHooksPath = workspaceCommands(context).hooksPath
+  if (hooksPath !== null && hooksPath !== expectedHooksPath) {
+    issues.push(
+      issue(`Git core.hooksPath must be ${expectedHooksPath}.`, '.git/config'),
+    )
     return sortedIssues(issues)
   }
-  if (hooksPath === '.husky/_') return Object.freeze([])
+  if (hooksPath === expectedHooksPath) return Object.freeze([])
   if (requireActive) {
-    issues.push(issue('Git core.hooksPath must be .husky/_.', '.git/config'))
+    issues.push(
+      issue(`Git core.hooksPath must be ${expectedHooksPath}.`, '.git/config'),
+    )
   }
 
   let directory: string
   try {
-    directory = await resolveDefaultHooksDirectory(context.root)
+    directory = await resolveDefaultHooksDirectory(context.repositoryRoot)
   } catch {
     return Object.freeze([
       issue('Git default hooks directory could not be resolved.', '.git/hooks'),
@@ -412,7 +458,11 @@ async function configurationIssues(
   return sortedIssues(groups.flat())
 }
 
-function createIntents(analysis: GitHooksAnalysis): readonly ChangeIntent[] {
+function createIntents(
+  context: ProjectContext,
+  analysis: GitHooksAnalysis,
+): readonly ChangeIntent[] {
+  const commands = workspaceCommands(context)
   const intents: ChangeIntent[] = [
     ...DEVELOPMENT_DEPENDENCIES.map(([name, range]) =>
       dependencyIntent(
@@ -426,7 +476,7 @@ function createIntents(analysis: GitHooksAnalysis): readonly ChangeIntent[] {
     scriptIntent(
       MODULE_ID,
       'frontprep:prepare',
-      'husky',
+      commands.prepare,
       'owned',
       'Git Hooks owns deterministic Husky activation.',
     ),
@@ -446,13 +496,13 @@ function createIntents(analysis: GitHooksAnalysis): readonly ChangeIntent[] {
     executableFileIntent(
       MODULE_ID,
       '.husky/pre-commit',
-      PRE_COMMIT,
+      commands.preCommit,
       'Git Hooks runs lint-staged before commits.',
     ),
     executableFileIntent(
       MODULE_ID,
       '.husky/commit-msg',
-      COMMIT_MSG,
+      commands.commitMsg,
       'Git Hooks validates commit messages.',
     ),
     managedFileIntent(
@@ -484,9 +534,12 @@ function verificationResult(
 
 export const gitHooksModule: SetupModule<GitHooksAnalysis> = Object.freeze({
   id: MODULE_ID,
-  version: '1.0.0',
+  version: '2.0.0',
   async analyze(context: ProjectContext): Promise<GitHooksAnalysis> {
-    const stages = recognizedPrepareStages(context.packageJson.scripts?.prepare)
+    const stages = recognizedPrepareStages(
+      context,
+      context.packageJson.scripts?.prepare,
+    )
     if (stages.length > 1) {
       throw new ConflictError(
         'Prepare script contains multiple Husky activation stages.',
@@ -502,10 +555,10 @@ export const gitHooksModule: SetupModule<GitHooksAnalysis> = Object.freeze({
     return Object.freeze({ integratePrepare: stages.length === 0 })
   },
   async plan(
-    _context: ProjectContext,
+    context: ProjectContext,
     analysis: GitHooksAnalysis,
   ): Promise<readonly ChangeIntent[]> {
-    return createIntents(analysis)
+    return createIntents(context, analysis)
   },
   async verify(context: ProjectContext): Promise<VerificationResult> {
     const issues: VerificationIssue[] = [
@@ -524,7 +577,10 @@ export const gitHooksModule: SetupModule<GitHooksAnalysis> = Object.freeze({
       }
     }
 
-    if (context.packageJson.scripts?.['frontprep:prepare'] !== 'husky') {
+    const commands = workspaceCommands(context)
+    if (
+      context.packageJson.scripts?.['frontprep:prepare'] !== commands.prepare
+    ) {
       issues.push(
         issue(
           'Frontprep-owned script frontprep:prepare is missing or changed.',
@@ -533,7 +589,8 @@ export const gitHooksModule: SetupModule<GitHooksAnalysis> = Object.freeze({
       )
     }
     if (
-      recognizedPrepareStages(context.packageJson.scripts?.prepare).length !== 1
+      recognizedPrepareStages(context, context.packageJson.scripts?.prepare)
+        .length !== 1
     ) {
       issues.push(
         issue(
@@ -544,7 +601,7 @@ export const gitHooksModule: SetupModule<GitHooksAnalysis> = Object.freeze({
     }
 
     const fileSystem = new FileSystem(context.root)
-    for (const [path, contents, mode, label] of CANONICAL_FILES) {
+    for (const [path, contents, mode, label] of canonicalFiles(context)) {
       const snapshot = await safeSnapshot(fileSystem, path)
       if (
         snapshot === null ||
@@ -555,8 +612,13 @@ export const gitHooksModule: SetupModule<GitHooksAnalysis> = Object.freeze({
         issues.push(issue(`Managed ${label} is missing or changed.`, path))
       }
     }
-    if (!(await hasHuskyDispatcher(context.root))) {
-      issues.push(issue('Husky dispatcher is missing or unsafe.', '.husky/_/h'))
+    if (!(await hasHuskyDispatcher(context.packageRoot))) {
+      issues.push(
+        issue(
+          'Husky dispatcher is missing or unsafe.',
+          `${commands.hooksPath}/h`,
+        ),
+      )
     }
     return verificationResult(issues)
   },

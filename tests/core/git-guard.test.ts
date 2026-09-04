@@ -10,7 +10,7 @@ import { assertSafeGitState } from '../../src/core/git-guard.js'
 import { serializeManifest, writeManifest } from '../../src/core/manifest.js'
 import { detectProject } from '../../src/core/project-detector.js'
 import type { FrontprepManifest } from '../../src/core/types.js'
-import { createProject } from '../helpers/project.js'
+import { createProject, createWorkspaceProject } from '../helpers/project.js'
 import { manifestV2 } from '../helpers/manifest.js'
 
 const execFileAsync = promisify(execFile)
@@ -80,6 +80,44 @@ describe('Git guard', () => {
       assertSafeGitState(await detectProject(project.root)),
     ).rejects.toThrow('extra.txt')
   })
+
+  it('maps workspace Git paths to package manifest records', async () => {
+    const project = await createWorkspaceProject()
+    const packagePath = join(project.packageRoot, 'package.json')
+    const packageBytes = Buffer.from(
+      (await readFile(packagePath, 'utf8')).replace(
+        '"private": true,',
+        '"private": true,\n  "scripts": { "frontprep:check": "echo ok" },',
+      ),
+    )
+    await writeFile(packagePath, packageBytes)
+    await writeManifest(
+      project.packageRoot,
+      manifestV2({
+        frontprepVersion: '0.1.0-beta.0',
+        files: {
+          package: {
+            'package.json': {
+              hash: hashBytes(packageBytes),
+              mode: '0644',
+              ownership: 'patched',
+            },
+          },
+          repository: {},
+        },
+        roots: { package: 'apps/web', workspace: '.' },
+      }),
+    )
+
+    await expect(
+      assertSafeGitState(await detectProject(project.packageRoot)),
+    ).resolves.toBeUndefined()
+
+    await writeFile(join(project.repositoryRoot, 'outside.txt'), 'dirty\n')
+    await expect(
+      assertSafeGitState(await detectProject(project.packageRoot)),
+    ).rejects.toThrow('outside.txt')
+  }, 30_000)
 
   it('authorizes one repository-scoped managed record and rejects duplicates', async () => {
     const project = await createProject()

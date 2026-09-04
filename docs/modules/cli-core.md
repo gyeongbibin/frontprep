@@ -65,11 +65,12 @@ The top-level entry catches only typed frontprep errors for concise output. Unex
 3. Resolve the Git top level and require it to equal the package root.
 4. Parse and validate `packageManager` as pnpm 10.
 5. validate Next.js 16 and TypeScript 5 declarations.
-6. Reject package workspaces and non-empty workspace package globs.
-7. Load and validate manifest schema v1 or v2 when present.
-8. Invoke the Next App Router adapter and resolve stylesheet imports.
-9. Normalize schema v1 in memory and resolve utility/test paths.
-10. Apply the Git safety policy.
+6. Resolve standalone or repository/workspace/package roots.
+7. Ask pnpm to validate an explicitly selected workspace package.
+8. Load and validate manifest schema v1 or v2 when present.
+9. Invoke the Next App Router adapter and resolve stylesheet imports.
+10. Normalize schema v1 in memory and resolve utility/test paths.
+11. Apply the repository-wide Git safety policy.
 
 The adapter requires exactly one root layout among `app/layout.{ts,tsx}` and
 `src/app/layout.{ts,tsx}`. It lexically recognizes static side-effect CSS
@@ -85,7 +86,11 @@ default. Options that disagree with a manifest or actual import are rejected.
 Missing utility/test directories are eligible for creation; files, unsafe
 paths, and symbolic-link components are rejected.
 
-Nested workspace targeting is intentionally deferred to the next feature PR.
+For `--cwd apps/web`, package-scoped files resolve from the selected package,
+repository-scoped files resolve from the Git root, and the lockfile resolves
+from the root pnpm workspace. Membership uses pnpm's directory filter with
+`--fail-if-no-match`; Frontprep does not implement a second workspace glob
+engine. Beta support allows one managed workspace package per repository.
 
 The detector never walks outside the resolved root and rejects paths whose realpath escapes through a symlink.
 
