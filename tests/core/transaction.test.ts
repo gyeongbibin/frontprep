@@ -19,7 +19,7 @@ import {
   type TransactionServices,
 } from '../../src/core/transaction.js'
 import type { ModuleId } from '../../src/core/types.js'
-import { createProject } from '../helpers/project.js'
+import { createProject, createWorkspaceProject } from '../helpers/project.js'
 import { manifestV2 } from '../helpers/manifest.js'
 
 const MODULE_VERSIONS: Readonly<Record<ModuleId, string>> = {
@@ -310,6 +310,32 @@ describe('applyPlan', () => {
     expect(
       JSON.parse(await readFile(join(project.root, '.frontprep.json'), 'utf8')),
     ).toEqual(result.manifest)
+  })
+
+  it('writes repository targets and package manifests to separate workspace roots', async () => {
+    const project = await createWorkspaceProject()
+    const context = await detectProject(project.packageRoot)
+    const workflowPath = '.github/workflows/frontprep-web.yml'
+
+    const result = await applyPlan(
+      context,
+      plan([
+        operation(workflowPath, 'name: workspace\n', null, 0o644, 'repository'),
+      ]),
+      services(new TestPackageManager()),
+    )
+
+    expect(
+      await readFile(join(project.repositoryRoot, workflowPath), 'utf8'),
+    ).toBe('name: workspace\n')
+    await expect(
+      readFile(join(project.packageRoot, workflowPath)),
+    ).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(result.manifest?.roots).toEqual({
+      package: 'apps/web',
+      workspace: '.',
+    })
+    expect(result.manifest?.files.repository[workflowPath]).toBeDefined()
   })
 
   it('rejects a stale source hash before changing any file', async () => {

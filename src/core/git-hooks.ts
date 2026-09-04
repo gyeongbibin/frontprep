@@ -10,10 +10,16 @@ export interface GitHooksActivation {
   readonly previousHooksPath: string | null
 }
 
+export interface GitHooksTarget {
+  readonly packageDirectory: string
+  readonly packageRoot: string
+}
+
 export interface GitHooksService {
   activate(
     root: string,
     signal?: AbortSignal,
+    target?: GitHooksTarget,
   ): Promise<GitHooksActivation | null>
   restore(root: string, activation: GitHooksActivation): Promise<void>
 }
@@ -82,22 +88,35 @@ export class GitHooksManager implements GitHooksService {
   async activate(
     root: string,
     signal?: AbortSignal,
+    target?: GitHooksTarget,
   ): Promise<GitHooksActivation | null> {
+    const hooksPath =
+      target === undefined ? '.husky/_' : `${target.packageDirectory}/.husky/_`
+    const dispatcherRoot = target?.packageRoot ?? root
     const previousHooksPath = await readLocalHooksPath(root, this.runner)
-    if (previousHooksPath === '.husky/_' && (await hasHuskyDispatcher(root))) {
+    if (
+      previousHooksPath === hooksPath &&
+      (await hasHuskyDispatcher(dispatcherRoot))
+    ) {
       return null
     }
 
     const activation = Object.freeze({ previousHooksPath })
     try {
-      await this.runner.run('pnpm', ['run', 'frontprep:prepare'], {
-        cwd: root,
-        signal,
-      })
+      await this.runner.run(
+        'pnpm',
+        target === undefined
+          ? ['run', 'frontprep:prepare']
+          : ['--dir', target.packageRoot, 'run', 'frontprep:prepare'],
+        {
+          cwd: root,
+          signal,
+        },
+      )
       const currentHooksPath = await readLocalHooksPath(root, this.runner)
-      if (currentHooksPath !== '.husky/_') {
+      if (currentHooksPath !== hooksPath) {
         throw new FrontprepError(
-          'Husky activation did not set core.hooksPath to .husky/_.',
+          `Husky activation did not set core.hooksPath to ${hooksPath}.`,
           {
             code: 'GIT_HOOKS_ACTIVATION_FAILED',
             exitCode: 1,
@@ -105,13 +124,13 @@ export class GitHooksManager implements GitHooksService {
           },
         )
       }
-      if (!(await hasHuskyDispatcher(root))) {
+      if (!(await hasHuskyDispatcher(dispatcherRoot))) {
         throw new FrontprepError(
           'Husky activation did not install its dispatcher.',
           {
             code: 'GIT_HOOKS_ACTIVATION_FAILED',
             exitCode: 1,
-            path: '.husky/_/h',
+            path: `${hooksPath}/h`,
             phase: 'installation',
           },
         )

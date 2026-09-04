@@ -324,8 +324,14 @@ export async function applyPlan(
     }
     if (services.activateGitHooks === true && plan.operations.length > 0) {
       gitHooksActivation = await gitHooks.activate(
-        context.root,
+        context.repositoryRoot,
         services.signal,
+        context.packageDirectory === '.'
+          ? undefined
+          : {
+              packageDirectory: context.packageDirectory,
+              packageRoot: context.packageRoot,
+            },
       )
     }
     services.signal?.throwIfAborted()
@@ -402,7 +408,7 @@ export async function applyPlan(
     const failures: unknown[] = []
     if (gitHooksActivation !== null) {
       try {
-        await gitHooks.restore(context.root, gitHooksActivation)
+        await gitHooks.restore(context.repositoryRoot, gitHooksActivation)
       } catch (restoration) {
         failures.push(restoration)
       }

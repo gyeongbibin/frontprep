@@ -10,7 +10,7 @@ import { detectProject } from '../../src/core/project-detector.js'
 import type { FrontprepManifest, ProjectContext } from '../../src/core/types.js'
 import { ciModule } from '../../src/modules/ci.js'
 import { manifestV2 } from '../helpers/manifest.js'
-import { createProject } from '../helpers/project.js'
+import { createProject, createWorkspaceProject } from '../helpers/project.js'
 
 interface WorkflowStep {
   name: string
@@ -138,6 +138,28 @@ describe('CI module plan', () => {
         scope: 'repository',
       }),
     ])
+  })
+
+  it('renders a repository workflow for one workspace package', async () => {
+    const project = await createWorkspaceProject()
+    const context = await detectProject(project.packageRoot)
+    await ciModule.analyze(context)
+    const workflow = (await ciModule.plan(context, undefined)).find(
+      (intent) => intent.kind === 'managed-file',
+    )
+
+    expect(workflow).toMatchObject({
+      path: expect.stringMatching(
+        /^\.github\/workflows\/frontprep-apps-web-[a-f0-9]{8}\.yml$/u,
+      ),
+      scope: 'repository',
+    })
+    expect(workflow?.kind).toBe('managed-file')
+    if (workflow?.kind !== 'managed-file') return
+    expect(workflow.content).toContain("- 'apps/web/**'")
+    expect(workflow.content).toContain(
+      'pnpm --filter ./apps/web --fail-if-no-match run frontprep:check',
+    )
   })
 
   it('renders the complete pinned and least-privilege workflow policy', async () => {

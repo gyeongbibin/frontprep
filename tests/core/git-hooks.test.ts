@@ -67,6 +67,7 @@ class StatefulRunner implements Pick<ProcessRunner, 'run'> {
   constructor(
     private readonly root: string,
     hooksPath: string | null = null,
+    private readonly activationHooksPath = '.husky/_',
   ) {
     this.hooksPath = hooksPath
   }
@@ -81,7 +82,7 @@ class StatefulRunner implements Pick<ProcessRunner, 'run'> {
       return success(`${this.hooksPath}\n`)
     }
     if (command === 'pnpm') {
-      this.hooksPath = '.husky/_'
+      this.hooksPath = this.activationHooksPath
       if (this.failActivation) throw failure(command, args, 7)
       if (this.installDispatcher) {
         await mkdir(join(this.root, '.husky/_'), { recursive: true })
@@ -193,6 +194,26 @@ describe('GitHooksManager', () => {
 
     await expect(new GitHooksManager(runner).activate(root)).resolves.toBeNull()
     expect(runner.calls.some(({ command }) => command === 'pnpm')).toBe(false)
+  })
+
+  it('activates a package-local dispatcher for a workspace target', async () => {
+    const repositoryRoot = await temporaryRoot()
+    const packageRoot = join(repositoryRoot, 'apps/web')
+    await mkdir(packageRoot, { recursive: true })
+    const runner = new StatefulRunner(packageRoot, null, 'apps/web/.husky/_')
+    const manager = new GitHooksManager(runner)
+
+    await expect(
+      manager.activate(repositoryRoot, undefined, {
+        packageDirectory: 'apps/web',
+        packageRoot,
+      }),
+    ).resolves.toEqual({ previousHooksPath: null })
+    expect(runner.calls).toContainEqual({
+      command: 'pnpm',
+      args: ['--dir', packageRoot, 'run', 'frontprep:prepare'],
+    })
+    expect(runner.hooksPath).toBe('apps/web/.husky/_')
   })
 
   it('restores an unset or custom previous path', async () => {

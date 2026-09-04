@@ -117,6 +117,17 @@ function includesGitHooks(modules: readonly SetupModule[]): boolean {
   return modules.some(({ id }) => id === 'git-hooks')
 }
 
+function gitHooksTarget(
+  context: ProjectContext,
+): { packageDirectory: string; packageRoot: string } | undefined {
+  return context.packageDirectory === '.'
+    ? undefined
+    : {
+        packageDirectory: context.packageDirectory,
+        packageRoot: context.packageRoot,
+      }
+}
+
 function activationRollbackFailure(
   original: unknown,
   restoration: unknown,
@@ -142,7 +153,11 @@ async function verifyEmptyPlan(
   try {
     signal?.throwIfAborted()
     if (includesGitHooks(services.modules)) {
-      activation = await services.gitHooks.activate(context.root, signal)
+      activation = await services.gitHooks.activate(
+        context.repositoryRoot,
+        signal,
+        gitHooksTarget(context),
+      )
     }
     signal?.throwIfAborted()
     assertValid(await services.verifyStructure(context, services.modules))
@@ -152,7 +167,7 @@ async function verifyEmptyPlan(
   } catch (error) {
     if (activation !== null) {
       try {
-        await services.gitHooks.restore(context.root, activation)
+        await services.gitHooks.restore(context.repositoryRoot, activation)
       } catch (restoration) {
         throw activationRollbackFailure(error, restoration)
       }

@@ -10,8 +10,11 @@ workflow. It also activates the fixed five-module registry used by the public
 
 The module works from the detected package and Git worktree root. It does not
 inspect a repository name, organization, remote, or consumer-specific source
-layout. The workflow runs only package-root commands, so `app/` and `src/app/`
-projects share the same CI configuration.
+layout. Standalone projects use the canonical root workflow below. A workspace
+target receives a repository-scoped, package-specific workflow that installs
+the shared lockfile and runs `frontprep:check` through pnpm's exact directory
+filter. See the
+[workspace target design](../superpowers/specs/2026-09-03-workspace-target-design.md).
 
 CI does not deploy, publish artifacts, upload coverage, create releases, test a
 Node matrix, or manage repository settings in v1. Those are separate policies
@@ -36,6 +39,13 @@ pnpm run frontprep:quality && pnpm run frontprep:test && pnpm run frontprep:buil
 
 CI does not add a conventional `build` alias. Existing consumer scripts remain
 untouched unless they use a Frontprep-owned name.
+
+For a workspace target, the workflow filename contains a normalized package
+directory and a short collision-resistant hash. Path filters include the
+selected package, root package metadata, `pnpm-workspace.yaml`, the shared
+lockfile, and the workflow itself. Installation runs at the repository root;
+the check command is `pnpm --filter ./<package-directory> --fail-if-no-match
+run frontprep:check`.
 
 ## Canonical workflow
 
