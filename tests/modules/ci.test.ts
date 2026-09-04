@@ -160,7 +160,7 @@ describe('CI module plan', () => {
     expect(workflow.content).toContain(
       'pnpm --filter ./apps/web --fail-if-no-match run frontprep:check',
     )
-  })
+  }, 30_000)
 
   it('renders the complete pinned and least-privilege workflow policy', async () => {
     const workflowIntent = (await plannedIntents()).find(

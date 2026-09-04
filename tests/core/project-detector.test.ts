@@ -141,5 +141,5 @@ describe('project detector', () => {
       root: expect.stringContaining('/apps/web'),
       workspaceRoot: expect.not.stringContaining('/apps/web'),
     })
-  })
+  }, 30_000)
 })

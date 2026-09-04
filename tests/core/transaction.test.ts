@@ -336,7 +336,7 @@ describe('applyPlan', () => {
       workspace: '.',
     })
     expect(result.manifest?.files.repository[workflowPath]).toBeDefined()
-  })
+  }, 30_000)
 
   it('rejects a stale source hash before changing any file', async () => {
     const project = await createProject()

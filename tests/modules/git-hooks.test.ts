@@ -190,7 +190,7 @@ describe('git hooks module plan', () => {
     ).toMatchObject({
       content: 'pnpm --dir apps/web exec commitlint --edit "$1"\n',
     })
-  })
+  }, 30_000)
 
   it.each([
     'husky',

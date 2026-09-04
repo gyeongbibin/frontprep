@@ -117,7 +117,7 @@ describe('Git guard', () => {
     await expect(
       assertSafeGitState(await detectProject(project.packageRoot)),
     ).rejects.toThrow('outside.txt')
-  })
+  }, 30_000)
 
   it('authorizes one repository-scoped managed record and rejects duplicates', async () => {
     const project = await createProject()

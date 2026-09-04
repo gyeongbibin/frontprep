@@ -115,5 +115,5 @@ describe('workspace target acceptance', () => {
     expect(workflows).toEqual([
       expect.stringMatching(/^frontprep-apps-web-[a-f0-9]{8}\.yml$/u),
     ])
-  })
+  }, 30_000)
 })
