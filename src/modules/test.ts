@@ -89,9 +89,13 @@ function renderVitestConfig(
   context: ProjectContext,
   setupPath: string,
 ): string {
-  const includes = discoveryRoots(context)
-    .map((root) => `      '${root}/${TEST_FILE_GLOB}',`)
-    .join('\n')
+  const includePatterns = discoveryRoots(context).map(
+    (root) => `'${root}/${TEST_FILE_GLOB}'`,
+  )
+  const includes =
+    includePatterns.length === 1
+      ? `[${includePatterns[0]}]`
+      : `[\n${includePatterns.map((pattern) => `      ${pattern},`).join('\n')}\n    ]`
   return `import react from '@vitejs/plugin-react'
 import { configDefaults, defineConfig } from 'vitest/config'
 import tsconfigPaths from 'vite-tsconfig-paths'
@@ -101,9 +105,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     exclude: [...configDefaults.exclude, '**/{__fixtures__,fixtures}/**'],
-    include: [
-${includes}
-    ],
+    include: ${includes},
     passWithNoTests: true,
     setupFiles: ['./${setupPath}'],
   },
