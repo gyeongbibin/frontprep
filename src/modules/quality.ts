@@ -138,8 +138,8 @@ const DEPENDENCIES = Object.freeze([
 ] as const)
 
 const SCRIPTS = Object.freeze([
-  ['frontprep:lint', 'eslint .', 'owned'],
-  ['frontprep:lint:fix', 'eslint . --fix', 'owned'],
+  ['frontprep:lint', 'eslint . --max-warnings=0', 'owned'],
+  ['frontprep:lint:fix', 'eslint . --fix --max-warnings=0', 'owned'],
   ['frontprep:format', 'prettier --write .', 'owned'],
   ['frontprep:format:check', 'prettier --check .', 'owned'],
   ['frontprep:typecheck', 'tsc --noEmit', 'owned'],
@@ -418,7 +418,7 @@ function createIntents(): readonly ChangeIntent[] {
 
 export const qualityModule: SetupModule<QualityAnalysis> = Object.freeze({
   id: MODULE_ID,
-  version: '1.0.0',
+  version: '2.0.0',
   async analyze(context: ProjectContext): Promise<QualityAnalysis> {
     const conflicts = await findConfigurationConflicts(context, true)
     const first = conflicts[0]

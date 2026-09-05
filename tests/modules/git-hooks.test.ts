@@ -25,14 +25,18 @@ const EXPECTED_DEPENDENCIES = {
 const EXPECTED_FILES = {
   '.husky/commit-msg': 'pnpm exec commitlint --edit "$1"\n',
   '.husky/pre-commit': 'pnpm exec lint-staged\n',
-  'commitlint.config.mjs': `export default {
+  'commitlint.config.mjs': `const commitlintConfig = {
   extends: ['@commitlint/config-conventional'],
 }
+
+export default commitlintConfig
 `,
-  'lint-staged.config.mjs': `export default {
+  'lint-staged.config.mjs': `const lintStagedConfig = {
   '*.{cjs,cts,js,jsx,mjs,mts,ts,tsx}': ['eslint --fix', 'prettier --write'],
   '*.{css,json,jsonc,md,mdx,yaml,yml}': 'prettier --write',
 }
+
+export default lintStagedConfig
 `,
 }
 
@@ -92,6 +96,7 @@ describe('git hooks module plan', () => {
     const analysis = await gitHooksModule.analyze(context)
     const intents = await gitHooksModule.plan(context, analysis)
 
+    expect(gitHooksModule.version).toBe('3.0.0')
     expect(analysis).toEqual({ integratePrepare: true })
     expect(
       intents

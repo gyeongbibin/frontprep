@@ -34,7 +34,7 @@ describe('quality module', () => {
     const intents = await imported.qualityModule.plan(context, analysis)
 
     expect(imported.qualityModule.id).toBe('quality')
-    expect(imported.qualityModule.version).toBe('1.0.0')
+    expect(imported.qualityModule.version).toBe('2.0.0')
     expect(
       intents
         .filter((intent) => intent.kind === 'dependency')
@@ -54,12 +54,12 @@ describe('quality module', () => {
         .map(({ command, name, policy }) => ({ command, name, policy })),
     ).toEqual([
       {
-        command: 'eslint .',
+        command: 'eslint . --max-warnings=0',
         name: 'frontprep:lint',
         policy: 'owned',
       },
       {
-        command: 'eslint . --fix',
+        command: 'eslint . --fix --max-warnings=0',
         name: 'frontprep:lint:fix',
         policy: 'owned',
       },
@@ -342,7 +342,7 @@ describe('quality module', () => {
       format: 'pnpm run frontprep:format',
       quality: 'pnpm run frontprep:quality',
       check: 'pnpm run frontprep:check',
-      'frontprep:lint': 'eslint .',
+      'frontprep:lint': 'eslint . --max-warnings=0',
       'frontprep:quality':
         'pnpm run frontprep:lint && pnpm run frontprep:format:check && pnpm run frontprep:typecheck',
       'frontprep:check': 'pnpm run frontprep:quality',

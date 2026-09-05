@@ -100,6 +100,24 @@ describe('Quality dependency compatibility', () => {
       expect(await readFile(fixturePath, 'utf8')).toBe(
         "export const greeting = 'hello'\n",
       )
+
+      await writeFile(
+        fixturePath,
+        'const warningFixture = {}\n\nexport default warningFixture\n',
+      )
+      await writeFile(
+        join(project.root, 'src/warning-fixture.ts'),
+        'export default {}\n',
+      )
+      await expect(
+        execFileAsync('pnpm', ['run', 'frontprep:lint'], {
+          cwd: project.root,
+          encoding: 'utf8',
+          env: minimumNodeEnvironment,
+          maxBuffer: 20 * 1024 * 1024,
+          timeout: 120_000,
+        }),
+      ).rejects.toMatchObject({ code: 1 })
     } finally {
       await rm(project.root, { force: true, recursive: true })
     }
