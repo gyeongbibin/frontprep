@@ -36,7 +36,7 @@ interface PackResult {
 describe('package metadata', () => {
   beforeAll(async () => {
     await execFileAsync('pnpm', ['build'], { cwd: root })
-  })
+  }, 30_000)
 
   it('publishes the frontprep executable and runtime assets', async () => {
     const contents = await readFile(

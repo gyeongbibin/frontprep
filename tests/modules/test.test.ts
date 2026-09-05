@@ -158,7 +158,7 @@ describe('test module', () => {
     const intents = await testModule.plan(context, analysis)
 
     expect(testModule.id).toBe('test')
-    expect(testModule.version).toBe('2.0.0')
+    expect(testModule.version).toBe('3.0.0')
     expect(analysis).toEqual({
       setupDirectory: 'src/test',
       setupPath: 'src/test/setup.ts',
@@ -230,13 +230,15 @@ describe('test module', () => {
     ).toEqual([
       {
         content: `import react from '@vitejs/plugin-react'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
   plugins: [tsconfigPaths(), react()],
   test: {
     environment: 'jsdom',
+    exclude: [...configDefaults.exclude, '**/{__fixtures__,fixtures}/**'],
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     passWithNoTests: true,
     setupFiles: ['./src/test/setup.ts'],
   },
@@ -278,7 +280,9 @@ afterEach(() => {
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          content: expect.stringContaining("setupFiles: ['./test/setup.ts']"),
+          content: expect.stringMatching(
+            /include: \[\s+'app\/\*\*\/\*\.\{test,spec\}\.\{js,mjs,cjs,ts,mts,cts,jsx,tsx\}',\s+'test\/\*\*\/\*\.\{test,spec\}\.\{js,mjs,cjs,ts,mts,cts,jsx,tsx\}',\s+\]/u,
+          ),
           path: 'vitest.config.mts',
         }),
         expect.objectContaining({ path: 'test/setup.ts' }),
@@ -297,8 +301,25 @@ afterEach(() => {
       const context = await detectProject(project.root, { testDirectory: path })
 
       const analysis = await testModule.analyze(context)
+      const intents = await testModule.plan(context, analysis)
+      const config = intents.find(
+        (intent) =>
+          intent.kind === 'managed-file' && intent.path === 'vitest.config.mts',
+      )
 
       expect(analysis.setupPath).toBe(expected)
+      expect(config?.kind).toBe('managed-file')
+      if (config?.kind !== 'managed-file') return
+      expect(config.content).toContain(
+        "'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'",
+      )
+      if (path === 'tests/unit') {
+        expect(config.content).toContain(
+          "'tests/unit/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'",
+        )
+      } else {
+        expect(config.content.match(/src\/\*\*\//gu)).toHaveLength(1)
+      }
     },
   )
 
