@@ -1,1 +1,1 @@
-export const FRONTPREP_VERSION = '0.1.0-beta.0'
+export const FRONTPREP_VERSION = '0.1.0-beta.1'
