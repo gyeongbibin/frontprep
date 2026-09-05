@@ -1,6 +1,6 @@
 {
   "name": "@mingyeongbin/frontprep",
-  "version": "0.1.0-beta.1",
+  "version": "0.1.0-beta.2",
   "description": "An opinionated CLI for setting up frontend project tooling.",
   "keywords": [
     "frontend",
@@ -30,6 +30,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
+    "prepack": "pnpm --silent build --silent",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm build && pnpm test:run",
     "verify:package": "pnpm build && pnpm --silent dlx --package=node@22.22.1 node scripts/verify-package.mjs",
     "verify:quality-compatibility": "vitest run --config tests/acceptance/vitest.config.ts tests/acceptance/quality-module.acceptance.ts",

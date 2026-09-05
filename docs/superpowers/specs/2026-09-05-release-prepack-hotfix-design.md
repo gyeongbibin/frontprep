@@ -18,13 +18,15 @@ The package owns this lifecycle script:
 
 ```json
 {
-  "prepack": "pnpm build"
+  "prepack": "pnpm --silent build --silent"
 }
 ```
 
 Both `npm pack` and `npm publish` therefore rebuild `dist` from the checked-out
 source immediately before creating the tarball. Publication correctness no
 longer depends on which worktree last produced ignored build output.
+The silent flags keep `npm pack --json` machine-readable while preserving the
+build exit status.
 
 Package metadata tests require the exact `prepack` script. The public smoke
 check must execute the registry artifact outside the repository and require
