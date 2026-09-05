@@ -28,11 +28,13 @@ or rolled back safely. Commit or stash existing work before running it.
 - Node.js 22.22.1 or newer
 - Next.js 16 App Router with TypeScript 5
 - pnpm 10 declared in `packageManager`
-- one application at the Git repository root
-- either `app/` or `src/app/`
+- either a standalone application at the Git root or one explicitly selected
+  application package in a pnpm workspace
+- either `app/` or `src/app/` inside the selected package
 
-All-package workspace initialization, the Pages Router, JavaScript-only
-projects, and package managers other than pnpm are outside the v1 scope.
+Automatic all-package workspace initialization, the Pages Router,
+JavaScript-only projects, and package managers other than pnpm are outside the
+v1 scope.
 
 One explicit Next.js package in a pnpm workspace is supported by pointing
 `--cwd` at its package directory:

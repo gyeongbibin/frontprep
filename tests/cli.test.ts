@@ -97,7 +97,7 @@ describe('frontprep CLI', () => {
     await expect(
       runCli(['node', 'frontprep', '--version'], undefined, output),
     ).resolves.toBe(0)
-    expect(output.stdoutText).toBe('0.1.0-beta.0\n')
+    expect(output.stdoutText).toBe('0.1.0-beta.1\n')
   })
 
   it('maps an unknown command to exit code 2', async () => {
