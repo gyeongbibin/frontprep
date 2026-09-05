@@ -585,7 +585,7 @@ export { cn } from './cn'
     expect(packageManager.supportedChecks).toBe(1)
     expect(packageManager.installs).toBe(1)
     expect(result.manifest?.modules).toMatchObject({
-      quality: '1.0.0',
+      quality: '2.0.0',
       tailwind: '2.0.0',
     })
     expect(

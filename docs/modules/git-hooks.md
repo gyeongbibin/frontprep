@@ -82,10 +82,12 @@ Git-managed hook file where Husky supplies `$1`.
 Git Hooks manages this file with mode `0644`:
 
 ```js
-export default {
+const lintStagedConfig = {
   '*.{cjs,cts,js,jsx,mjs,mts,ts,tsx}': ['eslint --fix', 'prettier --write'],
   '*.{css,json,jsonc,md,mdx,yaml,yml}': 'prettier --write',
 }
+
+export default lintStagedConfig
 ```
 
 The two patterns do not overlap. JavaScript and TypeScript files are linted
@@ -102,13 +104,19 @@ The explicit `.mjs` extension is deterministic whether or not the consumer's
 Git Hooks manages this file with mode `0644`:
 
 ```js
-export default {
+const commitlintConfig = {
   extends: ['@commitlint/config-conventional'],
 }
+
+export default commitlintConfig
 ```
 
 Frontprep v1 uses the upstream Conventional Commits rules without adding a
 custom type list, scope list, prompt, or release policy.
+
+Both generated configurations use named default exports so the Next.js ESLint
+preset produces no `import/no-anonymous-default-export` warnings. This managed
+file update advances the Git Hooks module contract to `3.0.0`.
 
 ## Husky-Generated Installation Directory
 

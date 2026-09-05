@@ -121,8 +121,8 @@ Quality owns these internal scripts:
 
 ```json
 {
-  "frontprep:lint": "eslint .",
-  "frontprep:lint:fix": "eslint . --fix",
+  "frontprep:lint": "eslint . --max-warnings=0",
+  "frontprep:lint:fix": "eslint . --fix --max-warnings=0",
   "frontprep:format": "prettier --write .",
   "frontprep:format:check": "prettier --check .",
   "frontprep:typecheck": "tsc --noEmit",
@@ -151,6 +151,10 @@ Conventional aliases use `preserve-existing`: a user-owned command remains
 unchanged. The frontprep-owned scripts use `owned`: an unrecorded differing
 command is a conflict, while a command recorded in the manifest may be updated
 by a later frontprep version.
+
+`--max-warnings=0` makes warnings fail both the read-only and autofix commands.
+The Quality module contract version is `2.0.0`; unchanged manifest-owned v1
+commands are upgraded transactionally on the next `init`.
 
 ## Analysis and Conflict Rules
 

@@ -299,8 +299,8 @@ describe('complete v1 compatibility', () => {
       ) as FrontprepManifest
       expect(manifest.modules).toEqual({
         ci: '2.0.0',
-        'git-hooks': '2.0.0',
-        quality: '1.0.0',
+        'git-hooks': '3.0.0',
+        quality: '2.0.0',
         tailwind: '2.0.0',
         test: '3.0.0',
       })

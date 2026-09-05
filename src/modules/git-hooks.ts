@@ -37,14 +37,18 @@ const DEVELOPMENT_DEPENDENCIES = Object.freeze([
 
 const PRE_COMMIT = 'pnpm exec lint-staged\n'
 const COMMIT_MSG = 'pnpm exec commitlint --edit "$1"\n'
-const LINT_STAGED_CONFIG = `export default {
+const LINT_STAGED_CONFIG = `const lintStagedConfig = {
   '*.{cjs,cts,js,jsx,mjs,mts,ts,tsx}': ['eslint --fix', 'prettier --write'],
   '*.{css,json,jsonc,md,mdx,yaml,yml}': 'prettier --write',
 }
+
+export default lintStagedConfig
 `
-const COMMITLINT_CONFIG = `export default {
+const COMMITLINT_CONFIG = `const commitlintConfig = {
   extends: ['@commitlint/config-conventional'],
 }
+
+export default commitlintConfig
 `
 
 const COMPETING_DEPENDENCIES = Object.freeze([
@@ -534,7 +538,7 @@ function verificationResult(
 
 export const gitHooksModule: SetupModule<GitHooksAnalysis> = Object.freeze({
   id: MODULE_ID,
-  version: '2.0.0',
+  version: '3.0.0',
   async analyze(context: ProjectContext): Promise<GitHooksAnalysis> {
     const stages = recognizedPrepareStages(
       context,
